@@ -1,0 +1,6 @@
+[wrap-git]
+directory = boost-url-git
+
+revision = 6bd4691d4c52e97275846b85945da69115c0037d
+url = https://github.com/CPPAlliance/url.git
+patch_directory = boost-url
