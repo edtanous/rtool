@@ -9,15 +9,14 @@
 #include <string>
 #include <string_view>
 
-namespace crow
+namespace http
 {
 
     template <typename Adaptor, typename Handler> class Connection;
 
     struct Response
     {
-        template <typename Adaptor, typename Handler>
-        friend class crow::Connection;
+        template <typename Adaptor, typename Handler> friend class Connection;
         using response_type =
             boost::beast::http::response<boost::beast::http::string_body>;
 
@@ -178,4 +177,4 @@ namespace crow
         std::function<void(Response&)> completeRequestHandler;
         std::function<bool()> isAliveHelper;
     };
-} // namespace crow
+} // namespace http

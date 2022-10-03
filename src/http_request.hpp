@@ -14,7 +14,7 @@
 #include <string_view>
 #include <system_error>
 
-namespace crow
+namespace http
 {
 
     struct Request
@@ -95,4 +95,4 @@ namespace crow
         }
     };
 
-} // namespace crow
+} // namespace http

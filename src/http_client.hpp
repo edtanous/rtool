@@ -28,7 +28,7 @@
 #include <queue>
 #include <string>
 
-namespace crow
+namespace http
 {
 
     // It is assumed that the BMC should be able to handle 4 parallel
@@ -433,7 +433,7 @@ namespace crow
         bool pushInProgress = false;
         std::shared_ptr<Channel> channel;
 
-        friend class HttpClient;
+        friend class Client;
 
         void queuePending(PendingRequest&& pending)
         {
@@ -498,26 +498,26 @@ namespace crow
         }
     };
 
-    class HttpClient
+    class Client
     {
       private:
         std::unordered_map<std::string, std::shared_ptr<ConnectionPool> >
             connectionPools;
         boost::asio::io_context& ioc;
-        HttpClient() = default;
+        Client() = default;
 
         // Used as a dummy callback by sendData() in order to call
         // sendDataWithCallback()
         static void genericResHandler(const Response& /*res*/) {}
 
       public:
-        HttpClient(const HttpClient&) = delete;
-        HttpClient& operator=(const HttpClient&) = delete;
-        HttpClient(HttpClient&&) = delete;
-        HttpClient& operator=(HttpClient&&) = delete;
-        ~HttpClient() = default;
+        Client(const Client&) = delete;
+        Client& operator=(const Client&) = delete;
+        Client(Client&&) = delete;
+        Client& operator=(Client&&) = delete;
+        ~Client() = default;
 
-        HttpClient(boost::asio::io_context& iocIn) : ioc(iocIn) {}
+        Client(boost::asio::io_context& iocIn) : ioc(iocIn) {}
 
         // Send a request to destIP:destPort where additional processing of the
         // result is not required
@@ -576,4 +576,4 @@ namespace crow
             conn->queuePending(PendingRequest(std::move(thisReq), resHandler));
         }
     };
-} // namespace crow
+} // namespace http
