@@ -181,14 +181,6 @@ class Client {
 
   Client(boost::asio::io_context& iocIn);
 
-  // Send a request to destIP:destPort where additional processing of the
-  // result is not required
-  void sendData(std::string&& data, const std::string& id,
-                const std::string& destIP, uint16_t destPort,
-                const std::string& destUri, bool useSSL,
-                const boost::beast::http::fields& httpHeader,
-                const boost::beast::http::verb verb);
-
   // Send request to destIP:destPort and use the provided callback to
   // handle the response
   void sendDataWithCallback(std::string&& data, const std::string& id,

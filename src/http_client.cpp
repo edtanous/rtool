@@ -406,18 +406,6 @@ void Client::genericResHandler(const Response& /*res*/) {}
 
 Client::Client(boost::asio::io_context& iocIn) : ioc(iocIn) {}
 
-// Send a request to destIP:destPort where additional processing of the
-// result is not required
-void Client::sendData(std::string&& data, const std::string& id,
-                      const std::string& destIP, uint16_t destPort,
-                      const std::string& destUri, bool useSSL,
-                      const boost::beast::http::fields& httpHeader,
-                      const boost::beast::http::verb verb) {
-  const std::function<void(Response &&)> cb = genericResHandler;
-  sendDataWithCallback(std::move(data), id, destIP, destPort, destUri, useSSL,
-                       httpHeader, verb, cb);
-}
-
 // Send request to destIP:destPort and use the provided callback to
 // handle the response
 void Client::sendDataWithCallback(
