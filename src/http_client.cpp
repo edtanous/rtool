@@ -306,13 +306,13 @@ namespace http
         , channel(channelIn)
     {
         if (useSSL) {
-            boost::asio::ssl::context sslCtx(
+            boost::asio::ssl::context ssl_ctx(
                 boost::asio::ssl::context::tls_client);
 
             boost::system::error_code ec;
 
             // Support only TLS v1.2 & v1.3
-            sslCtx.set_options(
+            ssl_ctx.set_options(
                 boost::asio::ssl::context::default_workarounds |
                     boost::asio::ssl::context::no_sslv2 |
                     boost::asio::ssl::context::no_sslv3 |
@@ -324,16 +324,16 @@ namespace http
 
             // Add a directory containing certificate authority files to be
             // used for performing verification.
-            sslCtx.set_default_verify_paths(ec);
+            ssl_ctx.set_default_verify_paths(ec);
             if (ec) { return; }
 
             // Verify the remote server's certificate
-            sslCtx.set_verify_mode(boost::asio::ssl::verify_peer, ec);
+            ssl_ctx.set_verify_mode(boost::asio::ssl::verify_peer, ec);
             if (ec) { return; }
 
             // All cipher suites are set as per OWASP datasheet.
             // https://cheatsheetseries.owasp.org/cheatsheets/TLS_Cipher_String_Cheat_Sheet.html
-            constexpr const char* sslCiphers = "ECDHE-ECDSA-AES128-GCM-SHA256:"
+            constexpr const char* kSslCiphers = "ECDHE-ECDSA-AES128-GCM-SHA256:"
                                                "ECDHE-RSA-AES128-GCM-SHA256:"
                                                "ECDHE-ECDSA-AES256-GCM-SHA384:"
                                                "ECDHE-RSA-AES256-GCM-SHA384:"
@@ -345,12 +345,12 @@ namespace http
                                                "TLS_AES_256_GCM_SHA384:"
                                                "TLS_CHACHA20_POLY1305_SHA256";
 
-            if (SSL_CTX_set_cipher_list(sslCtx.native_handle(), sslCiphers) !=
+            if (SSL_CTX_set_cipher_list(ssl_ctx.native_handle(), kSslCiphers) !=
                 1) {
                 return;
             }
 
-            sslConn.emplace(conn, sslCtx);
+            sslConn.emplace(conn, ssl_ctx);
             setCipherSuiteTLSext();
         }
         doResolve();
@@ -367,15 +367,15 @@ namespace http
         }
 
         // Make sure we have some connections open ready to receive
-        for (std::weak_ptr<ConnectionInfo>& weakConn : connections) {
-            std::shared_ptr<ConnectionInfo> conn = weakConn.lock();
+        for (std::weak_ptr<ConnectionInfo>& weak_conn : connections) {
+            std::shared_ptr<ConnectionInfo> conn = weak_conn.lock();
             if (conn == nullptr) { continue; }
 
-            static unsigned int newId = 0;
-            newId++;
+            static unsigned int new_id = 0;
+            new_id++;
             conn = std::make_shared<ConnectionInfo>(
-                ioc, destIP, destPort, useSSL, newId, channel);
-            weakConn = conn->weak_from_this();
+                ioc, destIP, destPort, useSSL, new_id, channel);
+            weak_conn = conn->weak_from_this();
 
             // Only need to construct one extra connection max
             break;
@@ -452,29 +452,27 @@ namespace http
         const boost::beast::http::verb verb,
         const std::function<void(Response&&)>& resHandler)
     {
-        std::string clientKey = useSSL ? "https" : "http";
-        clientKey += destIP;
-        clientKey += ":";
-        clientKey += std::to_string(destPort);
+        std::string client_key = useSSL ? "https" : "http";
+        client_key += destIP;
+        client_key += ":";
+        client_key += std::to_string(destPort);
         // Use nullptr to avoid creating a ConnectionPool each time
-        std::shared_ptr<ConnectionPool>& conn = connectionPools[clientKey];
+        std::shared_ptr<ConnectionPool>& conn = connectionPools[client_key];
         if (conn == nullptr) {
             // Now actually create the ConnectionPool shared_ptr since it
             // does not already exist
             conn = std::make_shared<ConnectionPool>(
                 ioc, id, destIP, destPort, useSSL);
         }
-        else {
-        }
 
         // Send the data using either the existing connection pool or the
         // newly created connection pool Construct the request to be sent
-        boost::beast::http::request<boost::beast::http::string_body> thisReq(
+        boost::beast::http::request<boost::beast::http::string_body> this_req(
             verb, destUri, 11, "", httpHeader);
-        thisReq.set(boost::beast::http::field::host, destIP);
-        thisReq.keep_alive(true);
-        thisReq.body() = std::move(data);
-        thisReq.prepare_payload();
-        conn->queuePending(PendingRequest(std::move(thisReq), resHandler));
+        this_req.set(boost::beast::http::field::host, destIP);
+        this_req.keep_alive(true);
+        this_req.body() = std::move(data);
+        this_req.prepare_payload();
+        conn->queuePending(PendingRequest(std::move(this_req), resHandler));
     }
 } // namespace http
