@@ -106,6 +106,7 @@ srcfiles_rtool= [
   'src/boost_asio_ssl.cpp',
   'src/boost_asio.cpp',
   'src/boost_beast.cpp',
+  'src/http_client.cpp',
   'src/rtool.cpp',
 ]
 

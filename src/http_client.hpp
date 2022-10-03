@@ -82,269 +82,63 @@ namespace http
 
         friend class ConnectionPool;
 
-        void doResolve()
-        {
-            resolver.async_resolve(
-                host, std::to_string(port),
-                std::bind_front(
-                    &ConnectionInfo::afterResolve, this, shared_from_this()));
-        }
+        void doResolve();
 
         void afterResolve(
             const std::shared_ptr<ConnectionInfo>& /*self*/,
             const boost::system::error_code ec,
-            const boost::asio::ip::tcp::resolver::results_type& endpointList)
-        {
-            if (ec || (endpointList.empty())) { return; }
-
-            timer.expires_after(std::chrono::seconds(30));
-            timer.async_wait(std::bind_front(onTimeout, weak_from_this()));
-
-            boost::asio::async_connect(
-                conn, endpointList,
-                std::bind_front(
-                    &ConnectionInfo::afterConnect, this, shared_from_this()));
-        }
+            const boost::asio::ip::tcp::resolver::results_type& endpointList);
 
         void afterConnect(
             const std::shared_ptr<ConnectionInfo>& /*self*/,
             boost::beast::error_code ec,
-            const boost::asio::ip::tcp::endpoint& /*endpoint*/)
-        {
-            timer.cancel();
-            if (ec) { return; }
-            if (sslConn) {
-                doSslHandshake();
-                return;
-            }
-            sendMessage();
-        }
+            const boost::asio::ip::tcp::endpoint& /*endpoint*/);
 
-        void doSslHandshake()
-        {
-            if (!sslConn) { return; }
-            timer.expires_after(std::chrono::seconds(30));
-            timer.async_wait(std::bind_front(onTimeout, weak_from_this()));
-            sslConn->async_handshake(
-                boost::asio::ssl::stream_base::client,
-                std::bind_front(
-                    &ConnectionInfo::afterSslHandshake, this,
-                    shared_from_this()));
-        }
+        void doSslHandshake();
 
         void afterSslHandshake(
             const std::shared_ptr<ConnectionInfo>& /*self*/,
-            boost::beast::error_code ec)
-        {
-            timer.cancel();
-            if (ec) { return; }
-            sendMessage();
-        }
+            boost::beast::error_code ec);
 
-        void sendMessage()
-        {
-            channel->async_receive(std::bind_front(
-                &ConnectionInfo::onMessageReadyToSend, this,
-                shared_from_this()));
-
-            conn.async_wait(
-                boost::asio::ip::tcp::socket::wait_error,
-                std::bind_front(
-                    &ConnectionInfo::onIdleEvent, this, weak_from_this()));
-        }
+        void sendMessage();
 
         void onMessageReadyToSend(
             const std::shared_ptr<ConnectionInfo>& /*self*/,
             boost::system::error_code ec,
-            PendingRequest pending)
-        {
-            if (ec) { return; }
-
-            // Cancel our idle waiting event
-            conn.cancel(ec);
-            // intentionally ignore errors here.  It's possible there was
-            // nothing in progress to cancel
-
-            req = std::move(pending.req);
-            callback = std::move(pending.callback);
-
-            // Set a timeout on the operation
-            timer.expires_after(std::chrono::seconds(30));
-            timer.async_wait(std::bind_front(onTimeout, weak_from_this()));
-
-            // Send the HTTP request to the remote host
-            if (sslConn) {
-                boost::beast::http::async_write(
-                    *sslConn, *req,
-                    std::bind_front(
-                        &ConnectionInfo::afterWrite, this, shared_from_this()));
-            }
-            else {
-                boost::beast::http::async_write(
-                    conn, *req,
-                    std::bind_front(
-                        &ConnectionInfo::afterWrite, this, shared_from_this()));
-            }
-        }
+            PendingRequest pending);
 
         void onIdleEvent(
             const std::weak_ptr<ConnectionInfo>& /*self*/,
-            const boost::system::error_code& ec)
-        {
-            if (ec && ec != boost::asio::error::operation_aborted) {
-                doClose();
-            }
-        }
+            const boost::system::error_code& ec);
 
         void afterWrite(
             const std::shared_ptr<ConnectionInfo>& /*self*/,
             const boost::beast::error_code& ec,
-            size_t /*bytesTransferred*/)
-        {
-            timer.cancel();
-            if (ec) {
-                callback(Response(parser->release()));
-                return;
-            }
+            size_t /*bytesTransferred*/);
 
-            recvMessage();
-        }
-
-        void recvMessage()
-        {
-            parser.emplace(std::piecewise_construct, std::make_tuple());
-            parser->body_limit(httpReadBodyLimit);
-
-            timer.expires_after(std::chrono::seconds(30));
-            timer.async_wait(std::bind_front(onTimeout, weak_from_this()));
-
-            // Receive the HTTP response
-            if (sslConn) {
-                boost::beast::http::async_read(
-                    *sslConn, buffer, *parser,
-                    std::bind_front(
-                        &ConnectionInfo::afterRead, this, shared_from_this()));
-            }
-            else {
-                boost::beast::http::async_read(
-                    conn, buffer, *parser,
-                    std::bind_front(
-                        &ConnectionInfo::afterRead, this, shared_from_this()));
-            }
-        }
+        void recvMessage();
 
         void afterRead(
             const std::shared_ptr<ConnectionInfo>& /*self*/,
             const boost::beast::error_code& ec,
-            const std::size_t /*bytesTransferred*/)
-        {
-            timer.cancel();
-            if (ec && ec != boost::asio::ssl::error::stream_truncated) {
-                callback(Response(parser->release()));
-                return;
-            }
-            // Keep the connection alive if server supports it
-            // Else close the connection
-
-            // Copy the response into a Response object so that it can be
-            // processed by the callback function.
-            callback(Response(parser->release()));
-
-            // Callback has served its purpose, let it destruct
-            callback = nullptr;
-
-            // Is more data is now loaded for the next request?
-            if (parser->keep_alive()) { sendMessage(); }
-            else {
-                // Server is not keep-alive enabled so we need to close the
-                // connection and then start over from resolve
-                doClose();
-                doResolve();
-            }
-        }
+            const std::size_t /*bytesTransferred*/);
 
         static void onTimeout(
             const std::weak_ptr<ConnectionInfo>& weakSelf,
-            const boost::system::error_code ec)
-        {
-            if (ec == boost::asio::error::operation_aborted) { return; }
-            if (ec) {
-                // If the timer fails, we need to close the socket anyway, same
-                // as if it expired.
-            }
-            std::shared_ptr<ConnectionInfo> self = weakSelf.lock();
-            if (self == nullptr) { return; }
-            self->doClose();
-        }
+            const boost::system::error_code ec);
 
         void onTimerDone(
             const std::shared_ptr<ConnectionInfo>& /*self*/,
-            const boost::system::error_code& ec)
-        {
-            if (ec == boost::asio::error::operation_aborted) { return; }
-            else if (ec) {
-            }
+            const boost::system::error_code& ec);
 
-            // Let's close the connection
-            doClose();
-        }
+        void shutdownConn();
 
-        void shutdownConn()
-        {
-            boost::beast::error_code ec;
-            conn.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-            conn.close();
-
-            // not_connected happens sometimes so don't bother reporting it.
-            if (ec && ec != boost::beast::errc::not_connected) {}
-            else {
-            }
-        }
-
-        void doClose()
-        {
-            if (!sslConn) {
-                shutdownConn();
-                return;
-            }
-
-            sslConn->async_shutdown(std::bind_front(
-                &ConnectionInfo::afterSslShutdown, this, shared_from_this()));
-        }
+        void doClose();
 
         void afterSslShutdown(
             const std::shared_ptr<ConnectionInfo>& /*self*/,
-            const boost::system::error_code& ec)
-        {
-            if (ec) {}
-            else {
-            }
-            shutdownConn();
-        }
-
-        void setCipherSuiteTLSext()
-        {
-            if (!sslConn) { return; }
-            // NOTE: The SSL_set_tlsext_host_name is defined in tlsv1.h header
-            // file but its having old style casting (name is cast to void*).
-            // Since bmcweb compiler treats all old-style-cast as error, its
-            // causing the build failure. So replaced the same macro inline and
-            // did corrected the code by doing static_cast to viod*. This has to
-            // be fixed in openssl library in long run. Set SNI Hostname (many
-            // hosts need this to handshake successfully)
-            if (SSL_ctrl(
-                    sslConn->native_handle(), SSL_CTRL_SET_TLSEXT_HOSTNAME,
-                    TLSEXT_NAMETYPE_host_name,
-                    static_cast<void*>(&host.front())) == 0)
-
-            {
-                boost::beast::error_code ec{
-                    static_cast<int>(::ERR_get_error()),
-                    boost::asio::error::get_ssl_category()};
-
-                return;
-            }
-        }
+            const boost::system::error_code& ec);
+        void setCipherSuiteTLSext();
 
       public:
         explicit ConnectionInfo(
@@ -353,66 +147,7 @@ namespace http
             uint16_t destPortIn,
             bool useSSL,
             unsigned int connIdIn,
-            const std::shared_ptr<Channel>& channelIn)
-            : host(destIPIn)
-            , port(destPortIn)
-            , connId(connIdIn)
-            , resolver(iocIn)
-            , conn(iocIn)
-            , timer(iocIn)
-            , channel(channelIn)
-        {
-            if (useSSL) {
-                boost::asio::ssl::context sslCtx(
-                    boost::asio::ssl::context::tls_client);
-
-                boost::system::error_code ec;
-
-                // Support only TLS v1.2 & v1.3
-                sslCtx.set_options(
-                    boost::asio::ssl::context::default_workarounds |
-                        boost::asio::ssl::context::no_sslv2 |
-                        boost::asio::ssl::context::no_sslv3 |
-                        boost::asio::ssl::context::single_dh_use |
-                        boost::asio::ssl::context::no_tlsv1 |
-                        boost::asio::ssl::context::no_tlsv1_1,
-                    ec);
-                if (ec) { return; }
-
-                // Add a directory containing certificate authority files to be
-                // used for performing verification.
-                sslCtx.set_default_verify_paths(ec);
-                if (ec) { return; }
-
-                // Verify the remote server's certificate
-                sslCtx.set_verify_mode(boost::asio::ssl::verify_peer, ec);
-                if (ec) { return; }
-
-                // All cipher suites are set as per OWASP datasheet.
-                // https://cheatsheetseries.owasp.org/cheatsheets/TLS_Cipher_String_Cheat_Sheet.html
-                constexpr const char* sslCiphers =
-                    "ECDHE-ECDSA-AES128-GCM-SHA256:"
-                    "ECDHE-RSA-AES128-GCM-SHA256:"
-                    "ECDHE-ECDSA-AES256-GCM-SHA384:"
-                    "ECDHE-RSA-AES256-GCM-SHA384:"
-                    "ECDHE-ECDSA-CHACHA20-POLY1305:"
-                    "ECDHE-RSA-CHACHA20-POLY1305:"
-                    "DHE-RSA-AES128-GCM-SHA256:"
-                    "DHE-RSA-AES256-GCM-SHA384"
-                    "TLS_AES_128_GCM_SHA256:"
-                    "TLS_AES_256_GCM_SHA384:"
-                    "TLS_CHACHA20_POLY1305_SHA256";
-
-                if (SSL_CTX_set_cipher_list(
-                        sslCtx.native_handle(), sslCiphers) != 1) {
-                    return;
-                }
-
-                sslConn.emplace(conn, sslCtx);
-                setCipherSuiteTLSext();
-            }
-            doResolve();
-        }
+            const std::shared_ptr<Channel>& channelIn);
     };
 
     class ConnectionPool : public std::enable_shared_from_this<ConnectionPool>
@@ -435,52 +170,9 @@ namespace http
 
         friend class Client;
 
-        void queuePending(PendingRequest&& pending)
-        {
-            // If we have to queue it, push it into the request queue in time
-            // order
-            if (pushInProgress) {
-                if (requestQueue.size() >= maxRequestQueueSize) { return; }
-                requestQueue.emplace_back(std::move(pending));
-                return;
-            }
+        void queuePending(PendingRequest&& pending);
 
-            // Make sure we have some connections open ready to receive
-            for (std::weak_ptr<ConnectionInfo>& weakConn : connections) {
-                std::shared_ptr<ConnectionInfo> conn = weakConn.lock();
-                if (conn == nullptr) { continue; }
-
-                static unsigned int newId = 0;
-                newId++;
-                conn = std::make_shared<ConnectionInfo>(
-                    ioc, destIP, destPort, useSSL, newId, channel);
-                weakConn = conn->weak_from_this();
-
-                // Only need to construct one extra connection max
-                break;
-            }
-            pushInProgress = true;
-
-            channel->async_send(
-                boost::system::error_code(), std::move(pending),
-                std::bind_front(&ConnectionPool::channelPushComplete, this));
-        }
-
-        void channelPushComplete(boost::system::error_code ec)
-        {
-            pushInProgress = false;
-            if (ec) { return; }
-            if (!requestQueue.empty()) {
-                pushInProgress = true;
-
-                channel->async_send(
-                    boost::system::error_code(),
-                    std::move(requestQueue.front()),
-                    std::bind_front(
-                        &ConnectionPool::channelPushComplete, this));
-                requestQueue.pop_front();
-            }
-        }
+        void channelPushComplete(boost::system::error_code ec);
 
       public:
         explicit ConnectionPool(
@@ -488,14 +180,7 @@ namespace http
             const std::string& idIn,
             const std::string& destIPIn,
             uint16_t destPortIn,
-            bool useSSLIn)
-            : ioc(iocIn)
-            , id(idIn)
-            , destIP(destIPIn)
-            , destPort(destPortIn)
-            , useSSL(useSSLIn)
-        {
-        }
+            bool useSSLIn);
     };
 
     class Client
@@ -508,7 +193,7 @@ namespace http
 
         // Used as a dummy callback by sendData() in order to call
         // sendDataWithCallback()
-        static void genericResHandler(const Response& /*res*/) {}
+        static void genericResHandler(const Response& /*res*/);
 
       public:
         Client(const Client&) = delete;
@@ -517,7 +202,7 @@ namespace http
         Client& operator=(Client&&) = delete;
         ~Client() = default;
 
-        Client(boost::asio::io_context& iocIn) : ioc(iocIn) {}
+        Client(boost::asio::io_context& iocIn);
 
         // Send a request to destIP:destPort where additional processing of the
         // result is not required
@@ -529,13 +214,7 @@ namespace http
             const std::string& destUri,
             bool useSSL,
             const boost::beast::http::fields& httpHeader,
-            const boost::beast::http::verb verb)
-        {
-            const std::function<void(Response &&)> cb = genericResHandler;
-            sendDataWithCallback(
-                std::move(data), id, destIP, destPort, destUri, useSSL,
-                httpHeader, verb, cb);
-        }
+            const boost::beast::http::verb verb);
 
         // Send request to destIP:destPort and use the provided callback to
         // handle the response
@@ -548,32 +227,6 @@ namespace http
             bool useSSL,
             const boost::beast::http::fields& httpHeader,
             const boost::beast::http::verb verb,
-            const std::function<void(Response&&)>& resHandler)
-        {
-            std::string clientKey = useSSL ? "https" : "http";
-            clientKey += destIP;
-            clientKey += ":";
-            clientKey += std::to_string(destPort);
-            // Use nullptr to avoid creating a ConnectionPool each time
-            std::shared_ptr<ConnectionPool>& conn = connectionPools[clientKey];
-            if (conn == nullptr) {
-                // Now actually create the ConnectionPool shared_ptr since it
-                // does not already exist
-                conn = std::make_shared<ConnectionPool>(
-                    ioc, id, destIP, destPort, useSSL);
-            }
-            else {
-            }
-
-            // Send the data using either the existing connection pool or the
-            // newly created connection pool Construct the request to be sent
-            boost::beast::http::request<boost::beast::http::string_body>
-                thisReq(verb, destUri, 11, "", httpHeader);
-            thisReq.set(boost::beast::http::field::host, destIP);
-            thisReq.keep_alive(true);
-            thisReq.body() = std::move(data);
-            thisReq.prepare_payload();
-            conn->queuePending(PendingRequest(std::move(thisReq), resHandler));
-        }
+            const std::function<void(Response&&)>& resHandler);
     };
 } // namespace http
