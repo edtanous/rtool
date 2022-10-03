@@ -19,8 +19,6 @@
 #include <boost/beast/version.hpp>
 #include <boost/container/devector.hpp>
 #include <boost/system/error_code.hpp>
-#include "http_response.hpp"
-
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -28,205 +26,176 @@
 #include <queue>
 #include <string>
 
-namespace http
-{
+#include "http_response.hpp"
 
-    // It is assumed that the BMC should be able to handle 4 parallel
-    // connections
-    constexpr uint8_t maxPoolSize = 4;
-    constexpr uint8_t maxRequestQueueSize = 50;
-    constexpr unsigned int httpReadBodyLimit = 131072;
-    constexpr unsigned int httpReadBufferSize = 4096;
+namespace http {
 
-    struct PendingRequest
-    {
-        boost::beast::http::request<boost::beast::http::string_body> req;
-        std::function<void(Response&&)> callback;
-        PendingRequest(
-            boost::beast::http::request<boost::beast::http::string_body>&&
-                reqIn,
-            const std::function<void(Response&&)>& callbackIn)
-            : req(std::move(reqIn)), callback(callbackIn)
-        {
-        }
-        PendingRequest() = default;
-    };
+// It is assumed that the BMC should be able to handle 4 parallel
+// connections
+constexpr uint8_t maxPoolSize = 4;
+constexpr uint8_t maxRequestQueueSize = 50;
+constexpr unsigned int httpReadBodyLimit = 131072;
+constexpr unsigned int httpReadBufferSize = 4096;
 
-    using Channel = boost::asio::experimental::channel<void(
-        boost::system::error_code, PendingRequest)>;
+struct PendingRequest {
+  boost::beast::http::request<boost::beast::http::string_body> req;
+  std::function<void(Response&&)> callback;
+  PendingRequest(
+      boost::beast::http::request<boost::beast::http::string_body>&& reqIn,
+      const std::function<void(Response&&)>& callbackIn)
+      : req(std::move(reqIn)), callback(callbackIn) {}
+  PendingRequest() = default;
+};
 
-    class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo>
-    {
-      private:
-        std::string host;
-        uint16_t port;
-        uint32_t connId;
+using Channel = boost::asio::experimental::channel<void(
+    boost::system::error_code, PendingRequest)>;
 
-        // Data buffers
-        using BodyType = boost::beast::http::string_body;
-        using RequestType = boost::beast::http::request<BodyType>;
-        std::optional<RequestType> req;
-        std::optional<boost::beast::http::response_parser<BodyType> > parser;
-        boost::beast::flat_static_buffer<httpReadBufferSize> buffer;
+class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
+ private:
+  std::string host;
+  uint16_t port;
+  uint32_t connId;
 
-        // Async callables
-        std::function<void(Response&&)> callback;
-        boost::asio::ip::tcp::resolver resolver;
-        boost::asio::ip::tcp::socket conn;
-        std::optional<boost::beast::ssl_stream<boost::asio::ip::tcp::socket&> >
-            sslConn;
+  // Data buffers
+  using BodyType = boost::beast::http::string_body;
+  using RequestType = boost::beast::http::request<BodyType>;
+  std::optional<RequestType> req;
+  std::optional<boost::beast::http::response_parser<BodyType> > parser;
+  boost::beast::flat_static_buffer<httpReadBufferSize> buffer;
 
-        boost::asio::steady_timer timer;
+  // Async callables
+  std::function<void(Response&&)> callback;
+  boost::asio::ip::tcp::resolver resolver;
+  boost::asio::ip::tcp::socket conn;
+  std::optional<boost::beast::ssl_stream<boost::asio::ip::tcp::socket&> >
+      sslConn;
 
-        std::shared_ptr<Channel> channel;
+  boost::asio::steady_timer timer;
 
-        friend class ConnectionPool;
+  std::shared_ptr<Channel> channel;
 
-        void doResolve();
+  friend class ConnectionPool;
 
-        void afterResolve(
-            const std::shared_ptr<ConnectionInfo>& /*self*/,
-            const boost::system::error_code ec,
-            const boost::asio::ip::tcp::resolver::results_type& endpointList);
+  void doResolve();
 
-        void afterConnect(
-            const std::shared_ptr<ConnectionInfo>& /*self*/,
-            boost::beast::error_code ec,
-            const boost::asio::ip::tcp::endpoint& /*endpoint*/);
+  void afterResolve(
+      const std::shared_ptr<ConnectionInfo>& /*self*/,
+      const boost::system::error_code ec,
+      const boost::asio::ip::tcp::resolver::results_type& endpointList);
 
-        void doSslHandshake();
+  void afterConnect(const std::shared_ptr<ConnectionInfo>& /*self*/,
+                    boost::beast::error_code ec,
+                    const boost::asio::ip::tcp::endpoint& /*endpoint*/);
 
-        void afterSslHandshake(
-            const std::shared_ptr<ConnectionInfo>& /*self*/,
-            boost::beast::error_code ec);
+  void doSslHandshake();
 
-        void sendMessage();
+  void afterSslHandshake(const std::shared_ptr<ConnectionInfo>& /*self*/,
+                         boost::beast::error_code ec);
 
-        void onMessageReadyToSend(
-            const std::shared_ptr<ConnectionInfo>& /*self*/,
-            boost::system::error_code ec,
-            PendingRequest pending);
+  void sendMessage();
 
-        void onIdleEvent(
-            const std::weak_ptr<ConnectionInfo>& /*self*/,
-            const boost::system::error_code& ec);
+  void onMessageReadyToSend(const std::shared_ptr<ConnectionInfo>& /*self*/,
+                            boost::system::error_code ec,
+                            PendingRequest pending);
 
-        void afterWrite(
-            const std::shared_ptr<ConnectionInfo>& /*self*/,
-            const boost::beast::error_code& ec,
-            size_t /*bytesTransferred*/);
+  void onIdleEvent(const std::weak_ptr<ConnectionInfo>& /*self*/,
+                   const boost::system::error_code& ec);
 
-        void recvMessage();
+  void afterWrite(const std::shared_ptr<ConnectionInfo>& /*self*/,
+                  const boost::beast::error_code& ec,
+                  size_t /*bytesTransferred*/);
 
-        void afterRead(
-            const std::shared_ptr<ConnectionInfo>& /*self*/,
-            const boost::beast::error_code& ec,
-            const std::size_t /*bytesTransferred*/);
+  void recvMessage();
 
-        static void onTimeout(
-            const std::weak_ptr<ConnectionInfo>& weakSelf,
-            const boost::system::error_code ec);
+  void afterRead(const std::shared_ptr<ConnectionInfo>& /*self*/,
+                 const boost::beast::error_code& ec,
+                 const std::size_t /*bytesTransferred*/);
 
-        void onTimerDone(
-            const std::shared_ptr<ConnectionInfo>& /*self*/,
-            const boost::system::error_code& ec);
+  static void onTimeout(const std::weak_ptr<ConnectionInfo>& weakSelf,
+                        const boost::system::error_code ec);
 
-        void shutdownConn();
+  void onTimerDone(const std::shared_ptr<ConnectionInfo>& /*self*/,
+                   const boost::system::error_code& ec);
 
-        void doClose();
+  void shutdownConn();
 
-        void afterSslShutdown(
-            const std::shared_ptr<ConnectionInfo>& /*self*/,
-            const boost::system::error_code& ec);
-        void setCipherSuiteTLSext();
+  void doClose();
 
-      public:
-        explicit ConnectionInfo(
-            boost::asio::io_context& iocIn,
-            const std::string& destIPIn,
-            uint16_t destPortIn,
-            bool useSSL,
-            unsigned int connIdIn,
-            const std::shared_ptr<Channel>& channelIn);
-    };
+  void afterSslShutdown(const std::shared_ptr<ConnectionInfo>& /*self*/,
+                        const boost::system::error_code& ec);
+  void setCipherSuiteTLSext();
 
-    class ConnectionPool : public std::enable_shared_from_this<ConnectionPool>
-    {
-      private:
-        boost::asio::io_context& ioc;
-        std::string id;
-        std::string destIP;
-        uint16_t destPort;
-        bool useSSL;
-        std::array<std::weak_ptr<ConnectionInfo>, maxPoolSize> connections;
+ public:
+  explicit ConnectionInfo(boost::asio::io_context& iocIn,
+                          const std::string& destIPIn, uint16_t destPortIn,
+                          bool useSSL, unsigned int connIdIn,
+                          const std::shared_ptr<Channel>& channelIn);
+};
 
-        // Note, this is sorted by value.attemptAfter, to ensure that we queue
-        // operations in the appropriate order
-        boost::container::devector<PendingRequest> requestQueue;
+class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
+ private:
+  boost::asio::io_context& ioc;
+  std::string id;
+  std::string destIP;
+  uint16_t destPort;
+  bool useSSL;
+  std::array<std::weak_ptr<ConnectionInfo>, maxPoolSize> connections;
 
-        // set to true when we're in process of pushing a message to the queue
-        bool pushInProgress = false;
-        std::shared_ptr<Channel> channel;
+  // Note, this is sorted by value.attemptAfter, to ensure that we queue
+  // operations in the appropriate order
+  boost::container::devector<PendingRequest> requestQueue;
 
-        friend class Client;
+  // set to true when we're in process of pushing a message to the queue
+  bool pushInProgress = false;
+  std::shared_ptr<Channel> channel;
 
-        void queuePending(PendingRequest&& pending);
+  friend class Client;
 
-        void channelPushComplete(boost::system::error_code ec);
+  void queuePending(PendingRequest&& pending);
 
-      public:
-        explicit ConnectionPool(
-            boost::asio::io_context& iocIn,
-            const std::string& idIn,
-            const std::string& destIPIn,
-            uint16_t destPortIn,
-            bool useSSLIn);
-    };
+  void channelPushComplete(boost::system::error_code ec);
 
-    class Client
-    {
-      private:
-        std::unordered_map<std::string, std::shared_ptr<ConnectionPool> >
-            connectionPools;
-        boost::asio::io_context& ioc;
-        Client() = default;
+ public:
+  explicit ConnectionPool(boost::asio::io_context& iocIn,
+                          const std::string& idIn, const std::string& destIPIn,
+                          uint16_t destPortIn, bool useSSLIn);
+};
 
-        // Used as a dummy callback by sendData() in order to call
-        // sendDataWithCallback()
-        static void genericResHandler(const Response& /*res*/);
+class Client {
+ private:
+  std::unordered_map<std::string, std::shared_ptr<ConnectionPool> >
+      connectionPools;
+  boost::asio::io_context& ioc;
+  Client() = default;
 
-      public:
-        Client(const Client&) = delete;
-        Client& operator=(const Client&) = delete;
-        Client(Client&&) = delete;
-        Client& operator=(Client&&) = delete;
-        ~Client() = default;
+  // Used as a dummy callback by sendData() in order to call
+  // sendDataWithCallback()
+  static void genericResHandler(const Response& /*res*/);
 
-        Client(boost::asio::io_context& iocIn);
+ public:
+  Client(const Client&) = delete;
+  Client& operator=(const Client&) = delete;
+  Client(Client&&) = delete;
+  Client& operator=(Client&&) = delete;
+  ~Client() = default;
 
-        // Send a request to destIP:destPort where additional processing of the
-        // result is not required
-        void sendData(
-            std::string&& data,
-            const std::string& id,
-            const std::string& destIP,
-            uint16_t destPort,
-            const std::string& destUri,
-            bool useSSL,
-            const boost::beast::http::fields& httpHeader,
-            const boost::beast::http::verb verb);
+  Client(boost::asio::io_context& iocIn);
 
-        // Send request to destIP:destPort and use the provided callback to
-        // handle the response
-        void sendDataWithCallback(
-            std::string&& data,
-            const std::string& id,
-            const std::string& destIP,
-            uint16_t destPort,
-            const std::string& destUri,
-            bool useSSL,
-            const boost::beast::http::fields& httpHeader,
-            const boost::beast::http::verb verb,
-            const std::function<void(Response&&)>& resHandler);
-    };
-} // namespace http
+  // Send a request to destIP:destPort where additional processing of the
+  // result is not required
+  void sendData(std::string&& data, const std::string& id,
+                const std::string& destIP, uint16_t destPort,
+                const std::string& destUri, bool useSSL,
+                const boost::beast::http::fields& httpHeader,
+                const boost::beast::http::verb verb);
+
+  // Send request to destIP:destPort and use the provided callback to
+  // handle the response
+  void sendDataWithCallback(std::string&& data, const std::string& id,
+                            const std::string& destIP, uint16_t destPort,
+                            const std::string& destUri, bool useSSL,
+                            const boost::beast::http::fields& httpHeader,
+                            const boost::beast::http::verb verb,
+                            const std::function<void(Response&&)>& resHandler);
+};
+}  // namespace http

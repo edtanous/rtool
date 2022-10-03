@@ -1,180 +1,166 @@
 #pragma once
-#include <nlohmann/json.hpp>
-
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
-#include "hex_utils.hpp"
-
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
 
-namespace http
-{
+#include "hex_utils.hpp"
 
-    template <typename Adaptor, typename Handler> class Connection;
+namespace http {
 
-    struct Response
-    {
-        template <typename Adaptor, typename Handler> friend class Connection;
-        using response_type =
-            boost::beast::http::response<boost::beast::http::string_body>;
+template <typename Adaptor, typename Handler>
+class Connection;
 
-        std::optional<response_type> stringResponse;
+struct Response {
+  template <typename Adaptor, typename Handler>
+  friend class Connection;
+  using response_type =
+      boost::beast::http::response<boost::beast::http::string_body>;
 
-        nlohmann::json jsonValue;
+  std::optional<response_type> stringResponse;
 
-        void addHeader(const std::string_view key, const std::string_view value)
-        {
-            stringResponse->set(key, value);
-        }
+  nlohmann::json jsonValue;
 
-        void addHeader(boost::beast::http::field key, std::string_view value)
-        {
-            stringResponse->set(key, value);
-        }
+  void addHeader(const std::string_view key, const std::string_view value) {
+    stringResponse->set(key, value);
+  }
 
-        Response() : stringResponse(response_type{}) {}
+  void addHeader(boost::beast::http::field key, std::string_view value) {
+    stringResponse->set(key, value);
+  }
 
-        explicit Response(response_type&& stringResponseIn)
-            : stringResponse(stringResponseIn)
-        {
-        }
+  Response() : stringResponse(response_type{}) {}
 
-        Response(Response&& res) noexcept
-            : stringResponse(std::move(res.stringResponse)),
-              completed(res.completed)
-        {
-            jsonValue = std::move(res.jsonValue);
-            // See note in operator= move handler for why this is needed.
-            if (!res.completed) {
-                completeRequestHandler = std::move(res.completeRequestHandler);
-                res.completeRequestHandler = nullptr;
-            }
-            isAliveHelper = res.isAliveHelper;
-            res.isAliveHelper = nullptr;
-        }
+  explicit Response(response_type&& stringResponseIn)
+      : stringResponse(stringResponseIn) {}
 
-        ~Response() = default;
+  Response(Response&& res) noexcept
+      : stringResponse(std::move(res.stringResponse)),
+        completed(res.completed) {
+    jsonValue = std::move(res.jsonValue);
+    // See note in operator= move handler for why this is needed.
+    if (!res.completed) {
+      completeRequestHandler = std::move(res.completeRequestHandler);
+      res.completeRequestHandler = nullptr;
+    }
+    isAliveHelper = res.isAliveHelper;
+    res.isAliveHelper = nullptr;
+  }
 
-        Response(const Response&) = delete;
+  ~Response() = default;
 
-        Response& operator=(const Response& r) = delete;
+  Response(const Response&) = delete;
 
-        Response& operator=(Response&& r) noexcept
-        {
-            if (this == &r) { return *this; }
-            stringResponse = std::move(r.stringResponse);
-            r.stringResponse.emplace(response_type{});
-            jsonValue = std::move(r.jsonValue);
+  Response& operator=(const Response& r) = delete;
 
-            // Only need to move completion handler if not already completed
-            // Note, there are cases where we might move out of a Response
-            // object while in a completion handler for that response object.
-            // This check is intended to prevent destructing the functor we are
-            // currently executing from in that case.
-            if (!r.completed) {
-                completeRequestHandler = std::move(r.completeRequestHandler);
-                r.completeRequestHandler = nullptr;
-            }
-            else {
-                completeRequestHandler = nullptr;
-            }
-            completed = r.completed;
-            isAliveHelper = std::move(r.isAliveHelper);
-            r.isAliveHelper = nullptr;
-            return *this;
-        }
+  Response& operator=(Response&& r) noexcept {
+    if (this == &r) {
+      return *this;
+    }
+    stringResponse = std::move(r.stringResponse);
+    r.stringResponse.emplace(response_type{});
+    jsonValue = std::move(r.jsonValue);
 
-        void result(boost::beast::http::status v) { stringResponse->result(v); }
+    // Only need to move completion handler if not already completed
+    // Note, there are cases where we might move out of a Response
+    // object while in a completion handler for that response object.
+    // This check is intended to prevent destructing the functor we are
+    // currently executing from in that case.
+    if (!r.completed) {
+      completeRequestHandler = std::move(r.completeRequestHandler);
+      r.completeRequestHandler = nullptr;
+    } else {
+      completeRequestHandler = nullptr;
+    }
+    completed = r.completed;
+    isAliveHelper = std::move(r.isAliveHelper);
+    r.isAliveHelper = nullptr;
+    return *this;
+  }
 
-        boost::beast::http::status result() const
-        {
-            return stringResponse->result();
-        }
+  void result(boost::beast::http::status v) { stringResponse->result(v); }
 
-        unsigned resultInt() const { return stringResponse->result_int(); }
+  boost::beast::http::status result() const { return stringResponse->result(); }
 
-        std::string_view reason() const { return stringResponse->reason(); }
+  unsigned resultInt() const { return stringResponse->result_int(); }
 
-        bool isCompleted() const noexcept { return completed; }
+  std::string_view reason() const { return stringResponse->reason(); }
 
-        std::string& body() { return stringResponse->body(); }
+  bool isCompleted() const noexcept { return completed; }
 
-        std::string_view getHeaderValue(std::string_view key) const
-        {
-            return stringResponse->base()[key];
-        }
+  std::string& body() { return stringResponse->body(); }
 
-        void keepAlive(bool k) { stringResponse->keep_alive(k); }
+  std::string_view getHeaderValue(std::string_view key) const {
+    return stringResponse->base()[key];
+  }
 
-        bool keepAlive() const { return stringResponse->keep_alive(); }
+  void keepAlive(bool k) { stringResponse->keep_alive(k); }
 
-        void preparePayload() { stringResponse->prepare_payload(); }
+  bool keepAlive() const { return stringResponse->keep_alive(); }
 
-        void clear()
-        {
-            stringResponse.emplace(response_type{});
-            jsonValue.clear();
-            completed = false;
-        }
+  void preparePayload() { stringResponse->prepare_payload(); }
 
-        void write(std::string_view bodyPart)
-        {
-            stringResponse->body() += std::string(bodyPart);
-        }
+  void clear() {
+    stringResponse.emplace(response_type{});
+    jsonValue.clear();
+    completed = false;
+  }
 
-        void end()
-        {
-            // Only set etag if this request succeeded
-            if (result() == boost::beast::http::status::ok) {
-                // and the json response isn't empty
-                if (!jsonValue.empty()) {
-                    size_t hashval = std::hash<nlohmann::json>{}(jsonValue);
-                    std::string hexVal =
-                        "\"" + intToHexString(hashval, 8) + "\"";
-                    addHeader(boost::beast::http::field::etag, hexVal);
-                }
-            }
-            if (completed) { return; }
-            completed = true;
-            if (completeRequestHandler) { completeRequestHandler(*this); }
-        }
+  void write(std::string_view bodyPart) {
+    stringResponse->body() += std::string(bodyPart);
+  }
 
-        bool isAlive() const { return isAliveHelper && isAliveHelper(); }
+  void end() {
+    // Only set etag if this request succeeded
+    if (result() == boost::beast::http::status::ok) {
+      // and the json response isn't empty
+      if (!jsonValue.empty()) {
+        size_t hashval = std::hash<nlohmann::json>{}(jsonValue);
+        std::string hexVal = "\"" + intToHexString(hashval, 8) + "\"";
+        addHeader(boost::beast::http::field::etag, hexVal);
+      }
+    }
+    if (completed) {
+      return;
+    }
+    completed = true;
+    if (completeRequestHandler) {
+      completeRequestHandler(*this);
+    }
+  }
 
-        void setCompleteRequestHandler(std::function<void(Response&)>&& handler)
-        {
-            completeRequestHandler = std::move(handler);
+  bool isAlive() const { return isAliveHelper && isAliveHelper(); }
 
-            // Now that we have a new completion handler attached, we're no
-            // longer complete
-            completed = false;
-        }
+  void setCompleteRequestHandler(std::function<void(Response&)>&& handler) {
+    completeRequestHandler = std::move(handler);
 
-        std::function<void(Response&)> releaseCompleteRequestHandler()
-        {
-            std::function<void(Response&)> ret = completeRequestHandler;
-            completeRequestHandler = nullptr;
-            completed = true;
-            return ret;
-        }
+    // Now that we have a new completion handler attached, we're no
+    // longer complete
+    completed = false;
+  }
 
-        void setIsAliveHelper(std::function<bool()>&& handler)
-        {
-            isAliveHelper = std::move(handler);
-        }
+  std::function<void(Response&)> releaseCompleteRequestHandler() {
+    std::function<void(Response&)> ret = completeRequestHandler;
+    completeRequestHandler = nullptr;
+    completed = true;
+    return ret;
+  }
 
-        std::function<bool()> releaseIsAliveHelper()
-        {
-            std::function<bool()> ret = std::move(isAliveHelper);
-            isAliveHelper = nullptr;
-            return ret;
-        }
+  void setIsAliveHelper(std::function<bool()>&& handler) {
+    isAliveHelper = std::move(handler);
+  }
 
-      private:
-        bool completed = false;
-        std::function<void(Response&)> completeRequestHandler;
-        std::function<bool()> isAliveHelper;
-    };
-} // namespace http
+  std::function<bool()> releaseIsAliveHelper() {
+    std::function<bool()> ret = std::move(isAliveHelper);
+    isAliveHelper = nullptr;
+    return ret;
+  }
+
+ private:
+  bool completed = false;
+  std::function<void(Response&)> completeRequestHandler;
+  std::function<bool()> isAliveHelper;
+};
+}  // namespace http
