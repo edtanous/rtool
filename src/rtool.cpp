@@ -1,4 +1,5 @@
 #include <boost/asio/io_context.hpp>
+#include "http_client.hpp"
 
 int main(int /*argc*/, char** /*argv[]*/)
 {
