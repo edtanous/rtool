@@ -28,6 +28,12 @@ if get_option('cpp_std') != 'c++20'
 endif
 
 cxx = meson.get_compiler('cpp')
+add_project_arguments(
+  cxx.get_supported_arguments([
+    '-Wno-non-virtual-dtor'
+  ]),
+  language: 'cpp'
+)
 
 rtool_dependencies = []
 
@@ -35,6 +41,10 @@ rtool_dependencies = []
 add_global_arguments(
   # Use no libraries
   '-DBOOST_ALL_NO_LIB',
+
+  # remove some warnings
+  '-DBOOST_ASIO_NO_DEPRECATED',
+  '-DBOOST_BEAST_NO_DEPRECATED',
 
   # Separately compile asio elements to reduce intermediate compile times
   '-DBOOST_ASIO_SEPARATE_COMPILATION',
@@ -54,10 +64,16 @@ rtool_dependencies += threads
 
 cli11 = dependency('cli11', version: '>=2.2.0', required : false, include_type: 'system')
 if not cli11.found()
-  openssl = subproject('cli11', required: true).get_variable('CLI11_dep')
+  cli11 = subproject('cli11', required: true).get_variable('CLI11_dep')
 endif
+rtool_dependencies += cli11
 
-rtool_dependencies += openssl
+fmt = dependency('fmt', version: '>=9.0.0', required : false, include_type: 'system')
+if not cli11.found()
+  fmt = subproject('fmt', required: true).get_variable('fmt_dep')
+endif
+rtool_dependencies += fmt
+
 openssl = dependency('openssl', version: '>=3.0', required : false, include_type: 'system')
 if not openssl.found()
   openssl = subproject('openssl', required: true)
