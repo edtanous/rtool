@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
 
   CLI11_PARSE(app, argc, argv);
 
-  if (sensor_list_opt != nullptr) {
+  if (*sensor_list_opt) {
     std::cout << "doing sensor list\n";
     return EXIT_SUCCESS;
   }

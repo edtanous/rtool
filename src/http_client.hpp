@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/asio/connect.hpp>
 #include <boost/asio/experimental/channel.hpp>
+#include <boost/asio/experimental/concurrent_channel.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/address.hpp>
 #include <boost/asio/ip/basic_endpoint.hpp>
@@ -47,7 +48,7 @@ struct PendingRequest {
   PendingRequest() = default;
 };
 
-using Channel = boost::asio::experimental::channel<void(
+using Channel = boost::asio::experimental::concurrent_channel<void(
     boost::system::error_code, PendingRequest)>;
 
 class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
@@ -153,7 +154,9 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
 
   void queuePending(PendingRequest&& pending);
 
-  void channelPushComplete(boost::system::error_code ec);
+  static void channelPushComplete(
+      const std::weak_ptr<ConnectionPool>& weak_self,
+      boost::system::error_code ec);
 
  public:
   explicit ConnectionPool(boost::asio::io_context& iocIn,

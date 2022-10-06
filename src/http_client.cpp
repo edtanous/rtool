@@ -372,21 +372,30 @@ void ConnectionPool::queuePending(PendingRequest&& pending) {
 
   channel->async_send(
       boost::system::error_code(), std::move(pending),
-      std::bind_front(&ConnectionPool::channelPushComplete, this));
+      std::bind_front(&ConnectionPool::channelPushComplete, weak_from_this()));
 }
 
-void ConnectionPool::channelPushComplete(boost::system::error_code ec) {
-  pushInProgress = false;
+void ConnectionPool::channelPushComplete(
+    const std::weak_ptr<ConnectionPool>& weak_self,
+    boost::system::error_code ec) {
+  std::shared_ptr<ConnectionPool> self = weak_self.lock();
+  if (self == nullptr) {
+    return;
+  }
+
+  self->pushInProgress = false;
   if (ec) {
     return;
   }
-  if (!requestQueue.empty()) {
-    pushInProgress = true;
 
-    channel->async_send(
-        boost::system::error_code(), std::move(requestQueue.front()),
-        std::bind_front(&ConnectionPool::channelPushComplete, this));
-    requestQueue.pop_front();
+  if (!self->requestQueue.empty()) {
+    self->pushInProgress = true;
+
+    self->channel->async_send(
+        boost::system::error_code(), std::move(self->requestQueue.front()),
+        std::bind_front(&ConnectionPool::channelPushComplete,
+                        self->weak_from_this()));
+    self->requestQueue.pop_front();
   }
 }
 
