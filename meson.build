@@ -50,9 +50,6 @@ add_global_arguments(
   '-DBOOST_ASIO_SEPARATE_COMPILATION',
   '-DBOOST_BEAST_SEPARATE_COMPILATION',
 
-  # Prefer std::string_view in beast APIs
-  '-DBOOST_BEAST_USE_STD_STRING_VIEW',
-
   # Make the build reproducible by removing filename logging
   '-DBOOST_URL_NO_SOURCE_LOCATION',
   '-DOPENSSL_NO_FILENAMES',
@@ -81,18 +78,11 @@ endif
 rtool_dependencies += openssl
 
 
-boost = dependency('boost', version : '>=1.80.0', required : false, include_type: 'system')
+boost = dependency('boost', version : '>=1.81.0', required : false, include_type: 'system')
 if not boost.found()
   boost = subproject('boost', required: true).get_variable('boost_dep')
 endif
 rtool_dependencies += boost
-
-if cxx.has_header('boost/url/url_view.hpp')
-  boost_url = declare_dependency()
-else
-  boost_url = subproject('boost-url', required: true).get_variable('boost_url_dep')
-endif
-rtool_dependencies += boost_url
 
 summary(
   {
