@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
       std::string(), id, "192.168.7.2", 443, "/redfish/v1", true, headers,
       boost::beast::http::verb::get, std::bind_front(&handle_response, http));
 
+  http.reset();
   ioc.run();
 
   return EXIT_SUCCESS;

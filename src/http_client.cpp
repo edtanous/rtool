@@ -113,7 +113,6 @@ void ConnectionInfo::onMessageReadyToSend(
   if (ec) {
     return;
   }
-
   // Cancel our idle waiting event
   conn.cancel(ec);
   // intentionally ignore errors here.  It's possible there was
@@ -234,6 +233,7 @@ void ConnectionInfo::onTimerDone(
 }
 
 void ConnectionInfo::shutdownConn() {
+  channel->cancel();
   boost::beast::error_code ec;
   conn.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
   conn.close();

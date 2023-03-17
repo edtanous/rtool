@@ -170,6 +170,7 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
                           uint16_t destPortIn, bool useSSLIn);
 
   ~ConnectionPool() {
+    std::cout << "destroying connection " << this << "\n";
     for (auto& connection : connections) {
       auto conn = connection.lock();
       if (conn) {
