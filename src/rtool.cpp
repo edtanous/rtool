@@ -3,12 +3,20 @@
 
 #include "http_client.hpp"
 
-static void handle_response(http::Response&& /*res*/) {
-  std::cout << "Got response\n";
+static void handle_response(const std::shared_ptr<http::Client>&,
+                            http::Response&& res) {
+  std::cout << "Got response " << res.body() << "\n";
 }
 
 int main(int argc, char** argv) {
   CLI::App app{"Redfish access tool"};
+
+  std::string host;
+  app.add_option("--host", host, "Host to connect to");
+
+  bool verify_server_tls = true;
+  app.add_option("--verify_server", verify_server_tls,
+                 "Verify the servers TLS certificate");
 
   CLI::App* sensor = app.add_subcommand("sensor", "Sensor related subcommands");
   // Define options
@@ -22,13 +30,13 @@ int main(int argc, char** argv) {
   }
 
   boost::asio::io_context ioc;
-  http::Client http(ioc);
+  std::shared_ptr<http::Client> http = std::make_shared<http::Client>(ioc);
 
   std::string id;
   boost::beast::http::fields headers;
-  http.sendDataWithCallback(std::string(), id, "192.168.7.2", 443,
-                            "/redfish/v1", true, headers,
-                            boost::beast::http::verb::get, &handle_response);
+  http->sendDataWithCallback(
+      std::string(), id, "192.168.7.2", 443, "/redfish/v1", true, headers,
+      boost::beast::http::verb::get, std::bind_front(&handle_response, http));
 
   ioc.run();
 

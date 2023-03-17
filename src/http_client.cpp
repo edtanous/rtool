@@ -31,6 +31,7 @@
 
 namespace http {
 void ConnectionInfo::doResolve() {
+  std::cout << "starting resolve\n";
   resolver.async_resolve(
       host, std::to_string(port),
       std::bind_front(&ConnectionInfo::afterResolve, this, shared_from_this()));
@@ -47,6 +48,7 @@ void ConnectionInfo::afterResolve(
   timer.expires_after(std::chrono::seconds(30));
   timer.async_wait(std::bind_front(onTimeout, weak_from_this()));
 
+  std::cout << "starting connect" << std::endl;
   boost::asio::async_connect(
       conn, endpointList,
       std::bind_front(&ConnectionInfo::afterConnect, this, shared_from_this()));
@@ -58,8 +60,10 @@ void ConnectionInfo::afterConnect(
     const boost::asio::ip::tcp::endpoint& /*endpoint*/) {
   timer.cancel();
   if (ec) {
+    std::cout << "Connect error" << std::endl;
     return;
   }
+  std::cout << "Connected" << std::endl;
   if (sslConn) {
     doSslHandshake();
     return;
@@ -71,8 +75,10 @@ void ConnectionInfo::doSslHandshake() {
   if (!sslConn) {
     return;
   }
-  timer.expires_after(std::chrono::seconds(30));
+  timer.expires_after(std::chrono::seconds(10));
   timer.async_wait(std::bind_front(onTimeout, weak_from_this()));
+
+  std::cout << "starting handshake" << std::endl;
   sslConn->async_handshake(boost::asio::ssl::stream_base::client,
                            std::bind_front(&ConnectionInfo::afterSslHandshake,
                                            this, shared_from_this()));
@@ -83,12 +89,15 @@ void ConnectionInfo::afterSslHandshake(
     boost::beast::error_code ec) {
   timer.cancel();
   if (ec) {
+    std::cout << "Handshake failed" << std::endl;
     return;
   }
+  std::cout << "Handshake succeeded" << std::endl;
   sendMessage();
 }
 
 void ConnectionInfo::sendMessage() {
+  std::cout << "receive started" << std::endl;
   channel->async_receive(std::bind_front(&ConnectionInfo::onMessageReadyToSend,
                                          this, shared_from_this()));
 
@@ -100,6 +109,7 @@ void ConnectionInfo::sendMessage() {
 void ConnectionInfo::onMessageReadyToSend(
     const std::shared_ptr<ConnectionInfo>& /*self*/,
     boost::system::error_code ec, PendingRequest pending) {
+  std::cout << "received" << std::endl;
   if (ec) {
     return;
   }
@@ -275,9 +285,11 @@ void ConnectionInfo::setCipherSuiteTLSext() {
     return;
   }
 }
+
 ConnectionInfo::ConnectionInfo(boost::asio::io_context& iocIn,
                                const std::string& destIPIn, uint16_t destPortIn,
                                bool useSSL, unsigned int connIdIn,
+                               const ConnectPolicy& policy,
                                const std::shared_ptr<Channel>& channelIn)
     : host(destIPIn),
       port(destPortIn),
@@ -286,6 +298,7 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& iocIn,
       conn(iocIn),
       timer(iocIn),
       channel(channelIn) {
+  std::cout << "Constructing ConnectionInfo\n";
   if (useSSL) {
     boost::asio::ssl::context ssl_ctx(boost::asio::ssl::context::tls_client);
 
@@ -300,20 +313,31 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& iocIn,
                             boost::asio::ssl::context::no_tlsv1_1,
                         ec);
     if (ec) {
+      std::cout << "Error\n";
       return;
     }
 
-    // Add a directory containing certificate authority files to be
-    // used for performing verification.
-    ssl_ctx.set_default_verify_paths(ec);
-    if (ec) {
-      return;
-    }
+    if (policy.verify_server_certificate) {
+      // Add a directory containing certificate authority files to be
+      // used for performing verification.
+      ssl_ctx.set_default_verify_paths(ec);
+      if (ec) {
+        std::cout << "Error\n";
+        return;
+      }
 
-    // Verify the remote server's certificate
-    ssl_ctx.set_verify_mode(boost::asio::ssl::verify_peer, ec);
-    if (ec) {
-      return;
+      // Verify the remote server's certificate
+      ssl_ctx.set_verify_mode(boost::asio::ssl::verify_peer, ec);
+      if (ec) {
+        std::cout << "Error\n";
+        return;
+      }
+    } else {
+      ssl_ctx.set_verify_mode(boost::asio::ssl::verify_none, ec);
+      if (ec) {
+        std::cout << "Error\n";
+        return;
+      }
     }
 
     // All cipher suites are set as per OWASP datasheet.
@@ -332,14 +356,16 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& iocIn,
         "TLS_CHACHA20_POLY1305_SHA256";
 
     if (SSL_CTX_set_cipher_list(ssl_ctx.native_handle(), kSslCiphers) != 1) {
+      std::cout << "Error\n";
       return;
     }
 
     sslConn.emplace(conn, ssl_ctx);
     setCipherSuiteTLSext();
   }
-  doResolve();
 }
+
+void ConnectionInfo::start() { doResolve(); }
 
 void ConnectionPool::queuePending(PendingRequest&& pending) {
   // If we have to queue it, push it into the request queue in time
@@ -355,20 +381,26 @@ void ConnectionPool::queuePending(PendingRequest&& pending) {
   // Make sure we have some connections open ready to receive
   for (std::weak_ptr<ConnectionInfo>& weak_conn : connections) {
     std::shared_ptr<ConnectionInfo> conn = weak_conn.lock();
-    if (conn == nullptr) {
+    if (conn != nullptr) {
       continue;
     }
 
     static unsigned int new_id = 0;
     new_id++;
+
+    ConnectPolicy policy{.verify_server_certificate = false};
+
     conn = std::make_shared<ConnectionInfo>(ioc, destIP, destPort, useSSL,
-                                            new_id, channel);
+                                            new_id, policy, channel);
+    conn->start();
     weak_conn = conn->weak_from_this();
 
     // Only need to construct one extra connection max
     break;
   }
   pushInProgress = true;
+
+  std::cout << "sending" << std::endl;
 
   channel->async_send(
       boost::system::error_code(), std::move(pending),
@@ -391,6 +423,8 @@ void ConnectionPool::channelPushComplete(
   if (!self->requestQueue.empty()) {
     self->pushInProgress = true;
 
+    std::cout << "sending" << std::endl;
+
     self->channel->async_send(
         boost::system::error_code(), std::move(self->requestQueue.front()),
         std::bind_front(&ConnectionPool::channelPushComplete,
@@ -407,7 +441,8 @@ ConnectionPool::ConnectionPool(boost::asio::io_context& iocIn,
       id(idIn),
       destIP(destIPIn),
       destPort(destPortIn),
-      useSSL(useSSLIn) {}
+      useSSL(useSSLIn),
+      channel(std::make_shared<Channel>(ioc, 0)) {}
 
 // Used as a dummy callback by sendData() in order to call
 // sendDataWithCallback()

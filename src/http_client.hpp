@@ -51,6 +51,10 @@ struct PendingRequest {
 using Channel = boost::asio::experimental::concurrent_channel<void(
     boost::system::error_code, PendingRequest)>;
 
+struct ConnectPolicy {
+  bool verify_server_certificate = true;
+};
+
 class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
  private:
   std::string host;
@@ -130,7 +134,9 @@ class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
   explicit ConnectionInfo(boost::asio::io_context& iocIn,
                           const std::string& destIPIn, uint16_t destPortIn,
                           bool useSSL, unsigned int connIdIn,
+                          const ConnectPolicy& policy,
                           const std::shared_ptr<Channel>& channelIn);
+  void start();
 };
 
 class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
@@ -162,6 +168,15 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
   explicit ConnectionPool(boost::asio::io_context& iocIn,
                           const std::string& idIn, const std::string& destIPIn,
                           uint16_t destPortIn, bool useSSLIn);
+
+  ~ConnectionPool() {
+    for (auto& connection : connections) {
+      auto conn = connection.lock();
+      if (conn) {
+        conn->shutdownConn();
+      }
+    }
+  }
 };
 
 class Client {
@@ -180,7 +195,7 @@ class Client {
   Client& operator=(const Client&) = delete;
   Client(Client&&) = delete;
   Client& operator=(Client&&) = delete;
-  ~Client() = default;
+  ~Client() { connectionPools.clear(); }
 
   Client(boost::asio::io_context& iocIn);
 
