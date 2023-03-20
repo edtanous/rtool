@@ -72,6 +72,7 @@ class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
   std::function<void(Response&&)> callback;
   boost::asio::ip::tcp::resolver resolver;
   boost::asio::ip::tcp::socket conn;
+  std::shared_ptr<ConnectPolicy> policy;
   std::optional<boost::beast::ssl_stream<boost::asio::ip::tcp::socket&> >
       sslConn;
 
@@ -133,7 +134,8 @@ class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
  public:
   explicit ConnectionInfo(boost::asio::io_context& iocIn,
                           const std::string& destIPIn, uint16_t destPortIn,
-                          bool useSSL, const ConnectPolicy& policy,
+                          bool useSSL,
+                          const std::shared_ptr<ConnectPolicy>& policy,
                           const std::shared_ptr<Channel>& channelIn);
   void start();
 };
@@ -144,6 +146,7 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
   std::string destIP;
   uint16_t destPort;
   bool useSSL;
+  std::shared_ptr<ConnectPolicy> policy;
   std::array<std::weak_ptr<ConnectionInfo>, maxPoolSize> connections;
 
   // Note, this is sorted by value.attemptAfter, to ensure that we queue
@@ -165,7 +168,8 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
  public:
   explicit ConnectionPool(boost::asio::io_context& iocIn,
                           const std::string& destIPIn, uint16_t destPortIn,
-                          bool useSSLIn);
+                          bool useSSLIn,
+                          const std::shared_ptr<ConnectPolicy>& policy);
 
   ~ConnectionPool() {
     std::cout << "destroying connection " << this << "\n";
@@ -182,6 +186,8 @@ class Client {
  private:
   std::unordered_map<std::string, std::shared_ptr<ConnectionPool> >
       connectionPools;
+
+  std::shared_ptr<ConnectPolicy> policy;
   boost::asio::io_context& ioc;
   Client() = default;
 
@@ -192,7 +198,7 @@ class Client {
   Client& operator=(Client&&) = delete;
   ~Client() { connectionPools.clear(); }
 
-  Client(boost::asio::io_context& iocIn);
+  Client(boost::asio::io_context& iocIn, ConnectPolicy&& policy);
 
   // Send request to destIP:destPort and use the provided callback to
   // handle the response

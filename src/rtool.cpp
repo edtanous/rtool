@@ -12,6 +12,8 @@ static void handle_response(const std::shared_ptr<http::Client>&,
 int main(int argc, char** argv) {
   CLI::App app{"Redfish access tool"};
 
+  http::ConnectPolicy policy;
+
   std::string host;
   app.add_option("--host", host, "Host to connect to");
 
@@ -25,8 +27,7 @@ int main(int argc, char** argv) {
     port = useTls ? 443 : 80;
   }
 
-  bool verify_server_tls = true;
-  app.add_option("--verify_server", verify_server_tls,
+  app.add_option("--verify_server", policy.verify_server_certificate,
                  "Verify the servers TLS certificate");
 
   CLI::App* sensor = app.add_subcommand("sensor", "Sensor related subcommands");
@@ -41,7 +42,9 @@ int main(int argc, char** argv) {
   }
 
   boost::asio::io_context ioc;
-  std::shared_ptr<http::Client> http = std::make_shared<http::Client>(ioc);
+
+  std::shared_ptr<http::Client> http =
+      std::make_shared<http::Client>(ioc, std::move(policy));
 
   std::string id;
   boost::beast::http::fields headers;

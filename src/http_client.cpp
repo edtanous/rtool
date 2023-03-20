@@ -288,12 +288,14 @@ void ConnectionInfo::setCipherSuiteTLSext() {
 
 ConnectionInfo::ConnectionInfo(boost::asio::io_context& iocIn,
                                const std::string& destIPIn, uint16_t destPortIn,
-                               bool useSSL, const ConnectPolicy& policy,
+                               bool useSSL,
+                               const std::shared_ptr<ConnectPolicy>& policyIn,
                                const std::shared_ptr<Channel>& channelIn)
     : host(destIPIn),
       port(destPortIn),
       resolver(iocIn),
       conn(iocIn),
+      policy(policyIn),
       timer(iocIn),
       channel(channelIn) {
   std::cout << "Constructing ConnectionInfo\n";
@@ -315,7 +317,7 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& iocIn,
       return;
     }
 
-    if (policy.verify_server_certificate) {
+    if (policy->verify_server_certificate) {
       // Add a directory containing certificate authority files to be
       // used for performing verification.
       ssl_ctx.set_default_verify_paths(ec);
@@ -383,8 +385,6 @@ void ConnectionPool::queuePending(PendingRequest&& pending) {
       continue;
     }
 
-    ConnectPolicy policy{.verify_server_certificate = false};
-
     conn = std::make_shared<ConnectionInfo>(ioc, destIP, destPort, useSSL,
                                             policy, channel);
     conn->start();
@@ -430,14 +430,17 @@ void ConnectionPool::channelPushComplete(
 
 ConnectionPool::ConnectionPool(boost::asio::io_context& iocIn,
                                const std::string& destIPIn, uint16_t destPortIn,
-                               bool useSSLIn)
+                               bool useSSLIn,
+                               const std::shared_ptr<ConnectPolicy>& policyIn)
     : ioc(iocIn),
       destIP(destIPIn),
       destPort(destPortIn),
       useSSL(useSSLIn),
+      policy(policyIn),
       channel(std::make_shared<Channel>(ioc, 0)) {}
 
-Client::Client(boost::asio::io_context& iocIn) : ioc(iocIn) {}
+Client::Client(boost::asio::io_context& iocIn, ConnectPolicy&& policyIn)
+    : policy(std::make_shared<ConnectPolicy>(policyIn)), ioc(iocIn) {}
 
 // Send request to destIP:destPort and use the provided callback to
 // handle the response
@@ -456,7 +459,8 @@ void Client::sendDataWithCallback(
   if (conn == nullptr) {
     // Now actually create the ConnectionPool shared_ptr since it
     // does not already exist
-    conn = std::make_shared<ConnectionPool>(ioc, destIP, destPort, useSSL);
+    conn =
+        std::make_shared<ConnectionPool>(ioc, destIP, destPort, useSSL, policy);
   }
 
   // Send the data using either the existing connection pool or the
