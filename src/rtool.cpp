@@ -21,8 +21,8 @@ int main(int argc, char** argv) {
   bool useTls = true;
   app.add_option("--tls", useTls, "Use TLS+HTTP");
 
-  if (!port){
-    port = useTls ? 443: 80;
+  if (!port) {
+    port = useTls ? 443 : 80;
   }
 
   bool verify_server_tls = true;
@@ -45,9 +45,9 @@ int main(int argc, char** argv) {
 
   std::string id;
   boost::beast::http::fields headers;
-  http->sendDataWithCallback(
-      std::string(), id, host, *port, "/redfish/v1", useTls, headers,
-      boost::beast::http::verb::get, std::bind_front(&handle_response, http));
+  http->sendDataWithCallback(std::string(), host, *port, "/redfish/v1", useTls,
+                             headers, boost::beast::http::verb::get,
+                             std::bind_front(&handle_response, http));
 
   http.reset();
   ioc.run();

@@ -133,8 +133,7 @@ class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
  public:
   explicit ConnectionInfo(boost::asio::io_context& iocIn,
                           const std::string& destIPIn, uint16_t destPortIn,
-                          bool useSSL, unsigned int connIdIn,
-                          const ConnectPolicy& policy,
+                          bool useSSL, const ConnectPolicy& policy,
                           const std::shared_ptr<Channel>& channelIn);
   void start();
 };
@@ -142,7 +141,6 @@ class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
 class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
  private:
   boost::asio::io_context& ioc;
-  std::string id;
   std::string destIP;
   uint16_t destPort;
   bool useSSL;
@@ -166,8 +164,8 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
 
  public:
   explicit ConnectionPool(boost::asio::io_context& iocIn,
-                          const std::string& idIn, const std::string& destIPIn,
-                          uint16_t destPortIn, bool useSSLIn);
+                          const std::string& destIPIn, uint16_t destPortIn,
+                          bool useSSLIn);
 
   ~ConnectionPool() {
     std::cout << "destroying connection " << this << "\n";
@@ -187,10 +185,6 @@ class Client {
   boost::asio::io_context& ioc;
   Client() = default;
 
-  // Used as a dummy callback by sendData() in order to call
-  // sendDataWithCallback()
-  static void genericResHandler(const Response& /*res*/);
-
  public:
   Client(const Client&) = delete;
   Client& operator=(const Client&) = delete;
@@ -202,9 +196,9 @@ class Client {
 
   // Send request to destIP:destPort and use the provided callback to
   // handle the response
-  void sendDataWithCallback(std::string&& data, const std::string& id,
-                            const std::string& destIP, uint16_t destPort,
-                            const std::string& destUri, bool useSSL,
+  void sendDataWithCallback(std::string&& data, const std::string& destIP,
+                            uint16_t destPort, const std::string& destUri,
+                            bool useSSL,
                             const boost::beast::http::fields& httpHeader,
                             const boost::beast::http::verb verb,
                             const std::function<void(Response&&)>& resHandler);
