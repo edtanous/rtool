@@ -288,7 +288,6 @@ void ConnectionInfo::setCipherSuiteTLSext() {
 
 ConnectionInfo::ConnectionInfo(boost::asio::io_context& iocIn,
                                const std::string& destIPIn, uint16_t destPortIn,
-                               bool useSSL,
                                const std::shared_ptr<ConnectPolicy>& policyIn,
                                const std::shared_ptr<Channel>& channelIn)
     : host(destIPIn),
@@ -299,7 +298,7 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& iocIn,
       timer(iocIn),
       channel(channelIn) {
   std::cout << "Constructing ConnectionInfo\n";
-  if (useSSL) {
+  if (policy->useTls) {
     boost::asio::ssl::context ssl_ctx(boost::asio::ssl::context::tls_client);
 
     boost::system::error_code ec;
@@ -385,8 +384,8 @@ void ConnectionPool::queuePending(PendingRequest&& pending) {
       continue;
     }
 
-    conn = std::make_shared<ConnectionInfo>(ioc, destIP, destPort, useSSL,
-                                            policy, channel);
+    conn = std::make_shared<ConnectionInfo>(ioc, destIP, destPort, policy,
+                                            channel);
     conn->start();
     weak_conn = conn->weak_from_this();
 
@@ -429,13 +428,11 @@ void ConnectionPool::channelPushComplete(
 }
 
 ConnectionPool::ConnectionPool(boost::asio::io_context& iocIn,
-                               const std::string& destIPIn, uint16_t destPortIn,
-                               bool useSSLIn,
+                               std::string_view destIPIn, uint16_t destPortIn,
                                const std::shared_ptr<ConnectPolicy>& policyIn)
     : ioc(iocIn),
       destIP(destIPIn),
       destPort(destPortIn),
-      useSSL(useSSLIn),
       policy(policyIn),
       channel(std::make_shared<Channel>(ioc, 0)) {}
 
@@ -444,13 +441,12 @@ Client::Client(boost::asio::io_context& iocIn, ConnectPolicy&& policyIn)
 
 // Send request to destIP:destPort and use the provided callback to
 // handle the response
-void Client::sendDataWithCallback(
-    std::string&& data, const std::string& destIP, uint16_t destPort,
-    const std::string& destUri, bool useSSL,
-    const boost::beast::http::fields& httpHeader,
-    const boost::beast::http::verb verb,
-    const std::function<void(Response&&)>& resHandler) {
-  std::string client_key = useSSL ? "https" : "http";
+void Client::sendData(std::string&& data, std::string_view destIP,
+                      uint16_t destPort, std::string_view destUri,
+                      const boost::beast::http::fields& httpHeader,
+                      const boost::beast::http::verb verb,
+                      const std::function<void(Response&&)>& resHandler) {
+  std::string client_key = policy->useTls ? "https" : "http";
   client_key += destIP;
   client_key += ":";
   client_key += std::to_string(destPort);
@@ -459,8 +455,7 @@ void Client::sendDataWithCallback(
   if (conn == nullptr) {
     // Now actually create the ConnectionPool shared_ptr since it
     // does not already exist
-    conn =
-        std::make_shared<ConnectionPool>(ioc, destIP, destPort, useSSL, policy);
+    conn = std::make_shared<ConnectionPool>(ioc, destIP, destPort, policy);
   }
 
   // Send the data using either the existing connection pool or the

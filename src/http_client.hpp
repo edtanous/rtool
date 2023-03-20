@@ -53,6 +53,7 @@ using Channel = boost::asio::experimental::concurrent_channel<void(
 
 struct ConnectPolicy {
   bool verify_server_certificate = true;
+  bool useTls = true;
 };
 
 class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
@@ -134,7 +135,6 @@ class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
  public:
   explicit ConnectionInfo(boost::asio::io_context& iocIn,
                           const std::string& destIPIn, uint16_t destPortIn,
-                          bool useSSL,
                           const std::shared_ptr<ConnectPolicy>& policy,
                           const std::shared_ptr<Channel>& channelIn);
   void start();
@@ -166,10 +166,9 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
       boost::system::error_code ec);
 
  public:
-  explicit ConnectionPool(boost::asio::io_context& iocIn,
-                          const std::string& destIPIn, uint16_t destPortIn,
-                          bool useSSLIn,
-                          const std::shared_ptr<ConnectPolicy>& policy);
+  ConnectionPool(boost::asio::io_context& iocIn, std::string_view destIPIn,
+                 uint16_t destPortIn,
+                 const std::shared_ptr<ConnectPolicy>& policy);
 
   ~ConnectionPool() {
     std::cout << "destroying connection " << this << "\n";
@@ -202,11 +201,10 @@ class Client {
 
   // Send request to destIP:destPort and use the provided callback to
   // handle the response
-  void sendDataWithCallback(std::string&& data, const std::string& destIP,
-                            uint16_t destPort, const std::string& destUri,
-                            bool useSSL,
-                            const boost::beast::http::fields& httpHeader,
-                            const boost::beast::http::verb verb,
-                            const std::function<void(Response&&)>& resHandler);
+  void sendData(std::string&& data, std::string_view destIP, uint16_t destPort,
+                std::string_view destUri,
+                const boost::beast::http::fields& httpHeader,
+                const boost::beast::http::verb verb,
+                const std::function<void(Response&&)>& resHandler);
 };
 }  // namespace http
