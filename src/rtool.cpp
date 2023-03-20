@@ -1,5 +1,6 @@
 #include <CLI/CLI.hpp>
 #include <boost/asio/io_context.hpp>
+#include <optional>
 
 #include "http_client.hpp"
 
@@ -13,6 +14,16 @@ int main(int argc, char** argv) {
 
   std::string host;
   app.add_option("--host", host, "Host to connect to");
+
+  std::optional<int16_t> port = 443;
+  app.add_option("--port", port, "Port to connect to");
+
+  bool useTls = true;
+  app.add_option("--tls", useTls, "Use TLS+HTTP");
+
+  if (!port){
+    port = useTls ? 443: 80;
+  }
 
   bool verify_server_tls = true;
   app.add_option("--verify_server", verify_server_tls,
@@ -35,7 +46,7 @@ int main(int argc, char** argv) {
   std::string id;
   boost::beast::http::fields headers;
   http->sendDataWithCallback(
-      std::string(), id, "192.168.7.2", 443, "/redfish/v1", true, headers,
+      std::string(), id, host, *port, "/redfish/v1", useTls, headers,
       boost::beast::http::verb::get, std::bind_front(&handle_response, http));
 
   http.reset();
