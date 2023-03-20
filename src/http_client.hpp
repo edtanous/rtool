@@ -145,7 +145,6 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
   boost::asio::io_context& ioc;
   std::string destIP;
   uint16_t destPort;
-  bool useSSL;
   std::shared_ptr<ConnectPolicy> policy;
   std::array<std::weak_ptr<ConnectionInfo>, maxPoolSize> connections;
 
