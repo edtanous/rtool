@@ -177,6 +177,11 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
       }
     }
   }
+
+  ConnectionPool(const ConnectionPool&) = delete;
+  ConnectionPool(ConnectionPool&&) = delete;
+  ConnectionPool& operator=(const ConnectionPool&) = delete;
+  ConnectionPool& operator=(ConnectionPool&&) = delete;
 };
 
 class Client {
@@ -198,8 +203,8 @@ class Client {
 
   // Send request to destIP:destPort and use the provided callback to
   // handle the response
-  void SendData(std::string&& data, std::string_view dest_ip, uint16_t dest_port,
-                std::string_view dest_uri,
+  void SendData(std::string&& data, std::string_view dest_ip,
+                uint16_t dest_port, std::string_view dest_uri,
                 const boost::beast::http::fields& http_header,
                 boost::beast::http::verb verb,
                 const std::function<void(Response&&)>& res_handler);

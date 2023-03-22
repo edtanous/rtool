@@ -80,8 +80,8 @@ void ConnectionInfo::DoSslHandshake() {
 
   std::cout << "starting handshake" << std::endl;
   sslConn_->async_handshake(boost::asio::ssl::stream_base::client,
-                           std::bind_front(&ConnectionInfo::AfterSslHandshake,
-                                           this, shared_from_this()));
+                            std::bind_front(&ConnectionInfo::AfterSslHandshake,
+                                            this, shared_from_this()));
 }
 
 void ConnectionInfo::AfterSslHandshake(
@@ -99,7 +99,7 @@ void ConnectionInfo::AfterSslHandshake(
 void ConnectionInfo::SendMessage() {
   std::cout << "receive started" << std::endl;
   channel_->async_receive(std::bind_front(&ConnectionInfo::OnMessageReadyToSend,
-                                         this, shared_from_this()));
+                                          this, shared_from_this()));
 
   conn_.async_wait(
       boost::asio::ip::tcp::socket::wait_error,
@@ -225,7 +225,8 @@ void ConnectionInfo::OnTimerDone(
     const boost::system::error_code& ec) {
   if (ec == boost::asio::error::operation_aborted) {
     return;
-  } if (ec) {
+  }
+  if (ec) {
   }
 
   // Let's close the connection
@@ -237,11 +238,6 @@ void ConnectionInfo::ShutdownConn() {
   boost::beast::error_code ec;
   conn_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
   conn_.close();
-
-  // not_connected happens sometimes so don't bother reporting it.
-  if (ec && ec != boost::beast::errc::not_connected) {
-  } else {
-  }
 }
 
 void ConnectionInfo::DoClose() {
@@ -251,15 +247,12 @@ void ConnectionInfo::DoClose() {
   }
 
   sslConn_->async_shutdown(std::bind_front(&ConnectionInfo::AfterSslShutdown,
-                                          this, shared_from_this()));
+                                           this, shared_from_this()));
 }
 
 void ConnectionInfo::AfterSslShutdown(
     const std::shared_ptr<ConnectionInfo>& /*self*/,
-    const boost::system::error_code& ec) {
-  if (ec) {
-  } else {
-  }
+    const boost::system::error_code& /*ec*/) {
   ShutdownConn();
 }
 
@@ -287,7 +280,8 @@ void ConnectionInfo::SetCipherSuiteTlSext() {
 }
 
 ConnectionInfo::ConnectionInfo(boost::asio::io_context& ioc_in,
-                               const std::string& dest_ip_in, uint16_t dest_port_in,
+                               const std::string& dest_ip_in,
+                               uint16_t dest_port_in,
                                const std::shared_ptr<ConnectPolicy>& policy_in,
                                const std::shared_ptr<Channel>& channel_in)
     : host_(dest_ip_in),
@@ -428,7 +422,8 @@ void ConnectionPool::ChannelPushComplete(
 }
 
 ConnectionPool::ConnectionPool(boost::asio::io_context& ioc_in,
-                               std::string_view dest_ip_in, uint16_t dest_port_in,
+                               std::string_view dest_ip_in,
+                               uint16_t dest_port_in,
                                const std::shared_ptr<ConnectPolicy>& policy_in)
     : ioc_(ioc_in),
       destIP_(dest_ip_in),
