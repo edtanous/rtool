@@ -431,7 +431,7 @@ ConnectionPool::ConnectionPool(boost::asio::io_context& ioc_in,
       policy_(policy_in),
       channel_(std::make_shared<Channel>(ioc_, 0)) {}
 
-Client::Client(boost::asio::io_context& ioc_in, ConnectPolicy&& policy_in)
+Client::Client(boost::asio::io_context& ioc_in, ConnectPolicy policy_in)
     : policy_(std::make_shared<ConnectPolicy>(policy_in)), ioc_(ioc_in) {}
 
 // Send request to destIP:destPort and use the provided callback to

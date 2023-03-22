@@ -199,7 +199,7 @@ class Client {
   Client& operator=(Client&&) = delete;
   ~Client() { connectionPools_.clear(); }
 
-  Client(boost::asio::io_context& ioc_in, ConnectPolicy&& policy);
+  Client(boost::asio::io_context& ioc_in, ConnectPolicy policy);
 
   // Send request to destIP:destPort and use the provided callback to
   // handle the response

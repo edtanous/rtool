@@ -185,7 +185,7 @@ void PrettyPrint(std::ostream& os, boost::json::value const& jv,
       indent->append(4, ' ');
       auto const& arr = jv.get_array();
       if (!arr.empty()) {
-        const auto* it = arr.begin();
+        boost::json::array::const_iterator it = arr.begin();
         for (;;) {
           os << *indent;
           PrettyPrint(os, *it, indent);
@@ -301,7 +301,7 @@ int main(int argc, char** argv) {
   boost::asio::io_context ioc;
 
   std::shared_ptr<http::Client> http =
-      std::make_shared<http::Client>(ioc, std::move(policy));
+      std::make_shared<http::Client>(ioc, policy);
 
   if (raw != nullptr) {
     for (const std::string& redpath : redpaths) {
