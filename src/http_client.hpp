@@ -60,7 +60,6 @@ class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
  private:
   std::string host;
   uint16_t port;
-  uint32_t connId;
 
   // Data buffers
   using BodyType = boost::beast::http::string_body;
@@ -187,7 +186,6 @@ class Client {
 
   std::shared_ptr<ConnectPolicy> policy;
   boost::asio::io_context& ioc;
-  Client() = default;
 
  public:
   Client(const Client&) = delete;

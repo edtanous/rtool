@@ -9,6 +9,7 @@
 // The null parser discards all the data
 class redpath_parser {
   struct handler {
+    handler(std::string_view redpath): redpath(redpath){}
     std::string redpath;
     bool redpath_match = true;
     constexpr static std::size_t max_object_size = std::size_t(-1);
@@ -117,7 +118,7 @@ class redpath_parser {
 
  public:
   redpath_parser(std::string_view redpath)
-      : p_(boost::json::parse_options(), std::string(redpath)) {}
+      : p_(boost::json::parse_options(), redpath) {}
 
   ~redpath_parser() {}
 

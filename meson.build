@@ -63,26 +63,26 @@ cli11 = dependency('cli11', version: '>=2.2.0', required : false, include_type: 
 if not cli11.found()
   cli11 = subproject('cli11', required: true).get_variable('CLI11_dep')
 endif
-rtool_dependencies += cli11
+rtool_dependencies += cli11.as_system()
 
 fmt = dependency('fmt', version: '>=9.0.0', required : false, include_type: 'system')
 if not cli11.found()
   fmt = subproject('fmt', required: true).get_variable('fmt_dep')
 endif
-rtool_dependencies += fmt
+rtool_dependencies += fmt.as_system()
 
 openssl = dependency('openssl', version: '>=3.0', required : false, include_type: 'system')
 if not openssl.found()
   openssl = subproject('openssl', required: true)
 endif
-rtool_dependencies += openssl
+rtool_dependencies += openssl.as_system()
 
 
 boost = dependency('boost', version : '>=1.81.0', required : false, include_type: 'system')
 if not boost.found()
   boost = subproject('boost', required: true).get_variable('boost_dep')
 endif
-rtool_dependencies += boost
+rtool_dependencies += boost.as_system()
 
 summary(
   {
