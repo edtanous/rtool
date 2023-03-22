@@ -66,7 +66,7 @@ endif
 rtool_dependencies += cli11.as_system()
 
 fmt = dependency('fmt', version: '>=9.0.0', required : false, include_type: 'system')
-if not cli11.found()
+if not fmt.found()
   fmt = subproject('fmt', required: true).get_variable('fmt_dep')
 endif
 rtool_dependencies += fmt.as_system()

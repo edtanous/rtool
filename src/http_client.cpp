@@ -1,5 +1,7 @@
 #include "http_client.hpp"
 
+#include <fmt/core.h>
+
 #include <boost/asio/connect.hpp>
 #include <boost/asio/experimental/channel.hpp>
 #include <boost/asio/io_context.hpp>
@@ -27,11 +29,12 @@
 #include <queue>
 #include <string>
 
+#include "boost_formatter.hpp"
 #include "http_response.hpp"
 
 namespace http {
 void ConnectionInfo::DoResolve() {
-  std::cout << "starting resolve\n";
+  //fmt::print("starting resolve\n");
   resolver_.async_resolve(
       host_, std::to_string(port_),
       std::bind_front(&ConnectionInfo::AfterResolve, this, shared_from_this()));
@@ -48,7 +51,7 @@ void ConnectionInfo::AfterResolve(
   timer_.expires_after(std::chrono::seconds(30));
   timer_.async_wait(std::bind_front(OnTimeout, weak_from_this()));
 
-  std::cout << "starting connect" << std::endl;
+  //fmt::print("starting connect\n");
   boost::asio::async_connect(
       conn_, endpoint_list,
       std::bind_front(&ConnectionInfo::AfterConnect, this, shared_from_this()));
@@ -60,10 +63,10 @@ void ConnectionInfo::AfterConnect(
     const boost::asio::ip::tcp::endpoint& /*endpoint*/) {
   timer_.cancel();
   if (ec) {
-    std::cout << "Connect error" << std::endl;
+    //fmt::print("Connect failed: {}\n", ec);
     return;
   }
-  std::cout << "Connected" << std::endl;
+  //fmt::print("Connected\n");
   if (sslConn_) {
     DoSslHandshake();
     return;
@@ -78,7 +81,7 @@ void ConnectionInfo::DoSslHandshake() {
   timer_.expires_after(std::chrono::seconds(10));
   timer_.async_wait(std::bind_front(OnTimeout, weak_from_this()));
 
-  std::cout << "starting handshake" << std::endl;
+  //fmt::print("starting handshake\n");
   sslConn_->async_handshake(boost::asio::ssl::stream_base::client,
                             std::bind_front(&ConnectionInfo::AfterSslHandshake,
                                             this, shared_from_this()));
@@ -89,15 +92,15 @@ void ConnectionInfo::AfterSslHandshake(
     boost::beast::error_code ec) {
   timer_.cancel();
   if (ec) {
-    std::cout << "Handshake failed" << std::endl;
+    //fmt::print("handshake failed {}\n", ec);
     return;
   }
-  std::cout << "Handshake succeeded" << std::endl;
+  //fmt::print("handshake succeeded {}\n", ec);
   SendMessage();
 }
 
 void ConnectionInfo::SendMessage() {
-  std::cout << "receive started" << std::endl;
+  //fmt::print("getting message\n");
   channel_->async_receive(std::bind_front(&ConnectionInfo::OnMessageReadyToSend,
                                           this, shared_from_this()));
 
@@ -109,7 +112,7 @@ void ConnectionInfo::SendMessage() {
 void ConnectionInfo::OnMessageReadyToSend(
     const std::shared_ptr<ConnectionInfo>& /*self*/,
     boost::system::error_code ec, PendingRequest pending) {
-  std::cout << "received" << std::endl;
+  //fmt::print("Got Message\n");
   if (ec) {
     return;
   }
@@ -291,7 +294,7 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& ioc_in,
       policy_(policy_in),
       timer_(ioc_in),
       channel_(channel_in) {
-  std::cout << "Constructing ConnectionInfo\n";
+  //fmt::print("Constructing ConnectionInfo\n");
   if (policy_->use_tls) {
     boost::asio::ssl::context ssl_ctx(boost::asio::ssl::context::tls_client);
 
@@ -388,7 +391,7 @@ void ConnectionPool::QueuePending(PendingRequest&& pending) {
   }
   pushInProgress_ = true;
 
-  std::cout << "sending" << std::endl;
+  //fmt::print("sending\n");
 
   channel_->async_send(
       boost::system::error_code(), std::move(pending),
@@ -411,7 +414,7 @@ void ConnectionPool::ChannelPushComplete(
   if (!self->requestQueue_.empty()) {
     self->pushInProgress_ = true;
 
-    std::cout << "sending" << std::endl;
+    //fmt::print("sending\n");
 
     self->channel_->async_send(
         boost::system::error_code(), std::move(self->requestQueue_.front()),

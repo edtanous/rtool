@@ -4,7 +4,9 @@
 #include <boost/json/basic_parser_impl.hpp>
 #include <optional>
 
+#include "boost_formatter.hpp"
 #include "http_client.hpp"
+
 
 // The null parser discards all the data
 class RedpathParser {
@@ -47,13 +49,8 @@ class RedpathParser {
     bool on_key_part(std::string_view key, std::size_t key_size,
                      std::error_code& /*unused*/) {
       std::string_view sv(redpath);
-      std::cout << "Comparing " << key << " to "
-                << sv.substr(key_size - key.size(), key.size()) << "\n";
-      std::cout << "redpath_match before is " << redpath_match << "\n";
       bool sub_matches = sv.substr(key_size - key.size(), key.size()) == key;
-      std::cout << "Sub matches " << sub_matches << "\n";
       redpath_match = redpath_match && sub_matches;
-      std::cout << "redpath_match is " << redpath_match << "\n";
       return true;
     }
     bool on_key(std::string_view key, std::size_t key_size,
@@ -63,7 +60,7 @@ class RedpathParser {
     bool on_string_part(std::string_view str, std::size_t /*unused*/,
                         std::error_code& /*unused*/) const {
       if (redpath_match) {
-        std::cout << str;
+        fmt::print("{}", str);
       }
       return true;
     }
@@ -75,8 +72,7 @@ class RedpathParser {
       }
       on_string_part(str, str_size, ec);
 
-      std::cout << "\n";
-
+      fmt::print("{}", "\n");
       return true;
     }
     static bool on_number_part(std::string_view /*unused*/,
@@ -294,7 +290,6 @@ int main(int argc, char** argv) {
   CLI11_PARSE(app, argc, argv);
 
   if (*sensor_list_opt) {
-    std::cout << "doing sensor list\n";
     return EXIT_SUCCESS;
   }
 
