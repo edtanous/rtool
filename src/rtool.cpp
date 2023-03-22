@@ -8,7 +8,7 @@
 
 // The null parser discards all the data
 class RedpathParser {
-  // NOLINTBEGIN(readability-identifier-naming)
+  // NOLINTBEGIN
   struct Handler {
     explicit Handler(std::string_view redpath) : redpath(redpath) {}
     std::string redpath;
