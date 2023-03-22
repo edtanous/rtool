@@ -33,18 +33,18 @@ namespace http {
 
 // It is assumed that the BMC should be able to handle 4 parallel
 // connections
-constexpr uint8_t maxPoolSize = 4;
-constexpr uint8_t maxRequestQueueSize = 50;
-constexpr unsigned int httpReadBodyLimit = 131072;
-constexpr unsigned int httpReadBufferSize = 4096;
+constexpr uint8_t kMaxPoolSize = 4;
+constexpr uint8_t kMaxRequestQueueSize = 50;
+constexpr unsigned int kHttpReadBodyLimit = 131072;
+constexpr unsigned int kHttpReadBufferSize = 4096;
 
 struct PendingRequest {
   boost::beast::http::request<boost::beast::http::string_body> req;
   std::function<void(Response&&)> callback;
   PendingRequest(
-      boost::beast::http::request<boost::beast::http::string_body>&& reqIn,
-      const std::function<void(Response&&)>& callbackIn)
-      : req(std::move(reqIn)), callback(callbackIn) {}
+      boost::beast::http::request<boost::beast::http::string_body>&& req_in,
+      const std::function<void(Response&&)>& callback_in)
+      : req(std::move(req_in)), callback(callback_in) {}
   PendingRequest() = default;
 };
 
@@ -53,127 +53,127 @@ using Channel = boost::asio::experimental::concurrent_channel<void(
 
 struct ConnectPolicy {
   bool verify_server_certificate = true;
-  bool useTls = true;
+  bool use_tls = true;
 };
 
 class ConnectionInfo : public std::enable_shared_from_this<ConnectionInfo> {
  private:
-  std::string host;
-  uint16_t port;
+  std::string host_;
+  uint16_t port_;
 
   // Data buffers
   using BodyType = boost::beast::http::string_body;
   using RequestType = boost::beast::http::request<BodyType>;
-  std::optional<RequestType> req;
-  std::optional<boost::beast::http::response_parser<BodyType> > parser;
-  boost::beast::flat_static_buffer<httpReadBufferSize> buffer;
+  std::optional<RequestType> req_;
+  std::optional<boost::beast::http::response_parser<BodyType> > parser_;
+  boost::beast::flat_static_buffer<kHttpReadBufferSize> buffer_;
 
   // Async callables
-  std::function<void(Response&&)> callback;
-  boost::asio::ip::tcp::resolver resolver;
-  boost::asio::ip::tcp::socket conn;
-  std::shared_ptr<ConnectPolicy> policy;
+  std::function<void(Response&&)> callback_;
+  boost::asio::ip::tcp::resolver resolver_;
+  boost::asio::ip::tcp::socket conn_;
+  std::shared_ptr<ConnectPolicy> policy_;
   std::optional<boost::beast::ssl_stream<boost::asio::ip::tcp::socket&> >
-      sslConn;
+      sslConn_;
 
-  boost::asio::steady_timer timer;
+  boost::asio::steady_timer timer_;
 
-  std::shared_ptr<Channel> channel;
+  std::shared_ptr<Channel> channel_;
 
   friend class ConnectionPool;
 
-  void doResolve();
+  void DoResolve();
 
-  void afterResolve(
+  void AfterResolve(
       const std::shared_ptr<ConnectionInfo>& /*self*/,
-      const boost::system::error_code ec,
-      const boost::asio::ip::tcp::resolver::results_type& endpointList);
+      boost::system::error_code ec,
+      const boost::asio::ip::tcp::resolver::results_type& endpoint_list);
 
-  void afterConnect(const std::shared_ptr<ConnectionInfo>& /*self*/,
+  void AfterConnect(const std::shared_ptr<ConnectionInfo>& /*self*/,
                     boost::beast::error_code ec,
                     const boost::asio::ip::tcp::endpoint& /*endpoint*/);
 
-  void doSslHandshake();
+  void DoSslHandshake();
 
-  void afterSslHandshake(const std::shared_ptr<ConnectionInfo>& /*self*/,
+  void AfterSslHandshake(const std::shared_ptr<ConnectionInfo>& /*self*/,
                          boost::beast::error_code ec);
 
-  void sendMessage();
+  void SendMessage();
 
-  void onMessageReadyToSend(const std::shared_ptr<ConnectionInfo>& /*self*/,
+  void OnMessageReadyToSend(const std::shared_ptr<ConnectionInfo>& /*self*/,
                             boost::system::error_code ec,
                             PendingRequest pending);
 
-  void onIdleEvent(const std::weak_ptr<ConnectionInfo>& /*self*/,
+  void OnIdleEvent(const std::weak_ptr<ConnectionInfo>& /*self*/,
                    const boost::system::error_code& ec);
 
-  void afterWrite(const std::shared_ptr<ConnectionInfo>& /*self*/,
+  void AfterWrite(const std::shared_ptr<ConnectionInfo>& /*self*/,
                   const boost::beast::error_code& ec,
                   size_t /*bytesTransferred*/);
 
-  void recvMessage();
+  void RecvMessage();
 
-  void afterRead(const std::shared_ptr<ConnectionInfo>& /*self*/,
+  void AfterRead(const std::shared_ptr<ConnectionInfo>& /*self*/,
                  const boost::beast::error_code& ec,
-                 const std::size_t /*bytesTransferred*/);
+                 std::size_t /*bytesTransferred*/);
 
-  static void onTimeout(const std::weak_ptr<ConnectionInfo>& weakSelf,
-                        const boost::system::error_code ec);
+  static void OnTimeout(const std::weak_ptr<ConnectionInfo>& weak_self,
+                        boost::system::error_code ec);
 
-  void onTimerDone(const std::shared_ptr<ConnectionInfo>& /*self*/,
+  void OnTimerDone(const std::shared_ptr<ConnectionInfo>& /*self*/,
                    const boost::system::error_code& ec);
 
-  void shutdownConn();
+  void ShutdownConn();
 
-  void doClose();
+  void DoClose();
 
-  void afterSslShutdown(const std::shared_ptr<ConnectionInfo>& /*self*/,
+  void AfterSslShutdown(const std::shared_ptr<ConnectionInfo>& /*self*/,
                         const boost::system::error_code& ec);
-  void setCipherSuiteTLSext();
+  void SetCipherSuiteTlSext();
 
  public:
-  explicit ConnectionInfo(boost::asio::io_context& iocIn,
-                          const std::string& destIPIn, uint16_t destPortIn,
+  explicit ConnectionInfo(boost::asio::io_context& ioc_in,
+                          const std::string& dest_ip_in, uint16_t dest_port_in,
                           const std::shared_ptr<ConnectPolicy>& policy,
-                          const std::shared_ptr<Channel>& channelIn);
-  void start();
+                          const std::shared_ptr<Channel>& channel_in);
+  void Start();
 };
 
 class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
  private:
-  boost::asio::io_context& ioc;
-  std::string destIP;
-  uint16_t destPort;
-  std::shared_ptr<ConnectPolicy> policy;
-  std::array<std::weak_ptr<ConnectionInfo>, maxPoolSize> connections;
+  boost::asio::io_context& ioc_;
+  std::string destIP_;
+  uint16_t destPort_;
+  std::shared_ptr<ConnectPolicy> policy_;
+  std::array<std::weak_ptr<ConnectionInfo>, kMaxPoolSize> connections_;
 
   // Note, this is sorted by value.attemptAfter, to ensure that we queue
   // operations in the appropriate order
-  boost::container::devector<PendingRequest> requestQueue;
+  boost::container::devector<PendingRequest> requestQueue_;
 
   // set to true when we're in process of pushing a message to the queue
-  bool pushInProgress = false;
-  std::shared_ptr<Channel> channel;
+  bool pushInProgress_ = false;
+  std::shared_ptr<Channel> channel_;
 
   friend class Client;
 
-  void queuePending(PendingRequest&& pending);
+  void QueuePending(PendingRequest&& pending);
 
-  static void channelPushComplete(
+  static void ChannelPushComplete(
       const std::weak_ptr<ConnectionPool>& weak_self,
       boost::system::error_code ec);
 
  public:
-  ConnectionPool(boost::asio::io_context& iocIn, std::string_view destIPIn,
-                 uint16_t destPortIn,
+  ConnectionPool(boost::asio::io_context& ioc_in, std::string_view dest_ip_in,
+                 uint16_t dest_port_in,
                  const std::shared_ptr<ConnectPolicy>& policy);
 
   ~ConnectionPool() {
     std::cout << "destroying connection " << this << "\n";
-    for (auto& connection : connections) {
+    for (auto& connection : connections_) {
       auto conn = connection.lock();
       if (conn) {
-        conn->shutdownConn();
+        conn->ShutdownConn();
       }
     }
   }
@@ -182,26 +182,26 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
 class Client {
  private:
   std::unordered_map<std::string, std::shared_ptr<ConnectionPool> >
-      connectionPools;
+      connectionPools_;
 
-  std::shared_ptr<ConnectPolicy> policy;
-  boost::asio::io_context& ioc;
+  std::shared_ptr<ConnectPolicy> policy_;
+  boost::asio::io_context& ioc_;
 
  public:
   Client(const Client&) = delete;
   Client& operator=(const Client&) = delete;
   Client(Client&&) = delete;
   Client& operator=(Client&&) = delete;
-  ~Client() { connectionPools.clear(); }
+  ~Client() { connectionPools_.clear(); }
 
-  Client(boost::asio::io_context& iocIn, ConnectPolicy&& policy);
+  Client(boost::asio::io_context& ioc_in, ConnectPolicy&& policy);
 
   // Send request to destIP:destPort and use the provided callback to
   // handle the response
-  void sendData(std::string&& data, std::string_view destIP, uint16_t destPort,
-                std::string_view destUri,
-                const boost::beast::http::fields& httpHeader,
-                const boost::beast::http::verb verb,
-                const std::function<void(Response&&)>& resHandler);
+  void SendData(std::string&& data, std::string_view dest_ip, uint16_t dest_port,
+                std::string_view dest_uri,
+                const boost::beast::http::fields& http_header,
+                boost::beast::http::verb verb,
+                const std::function<void(Response&&)>& res_handler);
 };
 }  // namespace http

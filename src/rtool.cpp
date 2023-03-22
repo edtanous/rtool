@@ -7,9 +7,9 @@
 #include "http_client.hpp"
 
 // The null parser discards all the data
-class redpath_parser {
-  struct handler {
-    handler(std::string_view redpath): redpath(redpath){}
+class RedpathParser {
+  struct Handler {
+    explicit Handler(std::string_view redpath): redpath(redpath){}
     std::string redpath;
     bool redpath_match = true;
     constexpr static std::size_t max_object_size = std::size_t(-1);
@@ -17,11 +17,11 @@ class redpath_parser {
     constexpr static std::size_t max_key_size = std::size_t(-1);
     constexpr static std::size_t max_string_size = std::size_t(-1);
 
-    using error_code = boost::json::error_code;
+    using ErrorCode = boost::json::error_code;
 
-    bool on_document_begin(error_code&) { return true; }
-    bool on_document_end(error_code&) { return true; }
-    bool on_object_begin(error_code&) {
+    static bool on_document_begin(error_code& /*unused*/) { return true; }
+    static bool on_document_end(error_code& /*unused*/) { return true; }
+    bool on_object_begin(error_code& /*unused*/) {
       if (!redpath_match) {
         redpath_match = true;
         return true;
@@ -29,8 +29,8 @@ class redpath_parser {
 
       return true;
     }
-    bool on_object_end(std::size_t, error_code&) { return true; }
-    bool on_array_begin(error_code&) {
+    static bool on_object_end(std::size_t /*unused*/, error_code& /*unused*/) { return true; }
+    bool on_array_begin(error_code& /*unused*/) {
       if (!redpath_match) {
         redpath_match = true;
         return true;
@@ -38,8 +38,8 @@ class redpath_parser {
 
       return true;
     }
-    bool on_array_end(std::size_t, error_code&) { return true; }
-    bool on_key_part(std::string_view key, std::size_t key_size, error_code&) {
+    static bool on_array_end(std::size_t /*unused*/, error_code& /*unused*/) { return true; }
+    bool on_key_part(std::string_view key, std::size_t key_size, error_code& /*unused*/) {
       std::string_view sv(redpath);
       std::cout << "Comparing " << key << " to "
                 << sv.substr(key_size - key.size(), key.size()) << "\n";
@@ -53,7 +53,7 @@ class redpath_parser {
     bool on_key(std::string_view key, std::size_t key_size, error_code& ec) {
       return on_key_part(key, key_size, ec);
     }
-    bool on_string_part(std::string_view str, std::size_t, error_code&) {
+    bool on_string_part(std::string_view str, std::size_t /*unused*/, error_code& /*unused*/) const {
       if (redpath_match) {
         std::cout << str;
       }
@@ -70,8 +70,8 @@ class redpath_parser {
 
       return true;
     }
-    bool on_number_part(std::string_view, error_code&) { return true; }
-    bool on_int64(std::int64_t, std::string_view, error_code&) {
+    static bool on_number_part(std::string_view /*unused*/, error_code& /*unused*/) { return true; }
+    bool on_int64(std::int64_t /*unused*/, std::string_view /*unused*/, error_code& /*unused*/) {
       if (!redpath_match) {
         redpath_match = true;
         return true;
@@ -79,22 +79,14 @@ class redpath_parser {
 
       return true;
     }
-    bool on_uint64(std::uint64_t, std::string_view, error_code&) {
+    bool on_uint64(std::uint64_t /*unused*/, std::string_view /*unused*/, error_code& /*unused*/) {
       if (!redpath_match) {
         redpath_match = true;
         return true;
       }
       return true;
     }
-    bool on_double(double, std::string_view, error_code&) {
-      if (!redpath_match) {
-        redpath_match = true;
-        return true;
-      }
-
-      return true;
-    }
-    bool on_bool(bool, error_code&) {
+    bool on_double(double /*unused*/, std::string_view /*unused*/, error_code& /*unused*/) {
       if (!redpath_match) {
         redpath_match = true;
         return true;
@@ -102,7 +94,7 @@ class redpath_parser {
 
       return true;
     }
-    bool on_null(error_code&) {
+    bool on_bool(bool /*unused*/, error_code& /*unused*/) {
       if (!redpath_match) {
         redpath_match = true;
         return true;
@@ -110,41 +102,52 @@ class redpath_parser {
 
       return true;
     }
-    bool on_comment_part(std::string_view, error_code&) { return false; }
-    bool on_comment(std::string_view, error_code&) { return false; }
+    bool on_null(error_code& /*unused*/) {
+      if (!redpath_match) {
+        redpath_match = true;
+        return true;
+      }
+
+      return true;
+    }
+    static bool on_comment_part(std::string_view /*unused*/, error_code& /*unused*/) { return false; }
+    static bool on_comment(std::string_view /*unused*/, error_code& /*unused*/) { return false; }
   };
 
-  boost::json::basic_parser<handler> p_;
+  boost::json::basic_parser<Handler> p_;
 
  public:
-  redpath_parser(std::string_view redpath)
+  explicit RedpathParser(std::string_view redpath)
       : p_(boost::json::parse_options(), redpath) {}
 
-  ~redpath_parser() {}
+  ~RedpathParser() = default;
 
-  std::size_t write(char const* data, std::size_t size,
+  std::size_t Write(char const* data, std::size_t size,
                     boost::system::error_code& ec) {
     auto const n = p_.write_some(false, data, size, ec);
-    if (!ec && n < size) ec = boost::json::error::extra_data;
+    if (!ec && n < size) { ec = boost::json::error::extra_data;
+}
     return n;
   }
 };
 
-void pretty_print(std::ostream& os, boost::json::value const& jv,
+void PrettyPrint(std::ostream& os, boost::json::value const& jv,
                   std::string* indent = nullptr) {
-  std::string indent_;
-  if (!indent) indent = &indent_;
+  std::string indent;
+  if (indent == nullptr) { indent = &indent;
+}
   switch (jv.kind()) {
     case boost::json::kind::object: {
       os << "{\n";
       indent->append(4, ' ');
       auto const& obj = jv.get_object();
       if (!obj.empty()) {
-        auto it = obj.begin();
+        const auto *it = obj.begin();
         for (;;) {
           os << *indent << boost::json::serialize(it->key()) << " : ";
-          pretty_print(os, it->value(), indent);
-          if (++it == obj.end()) break;
+          PrettyPrint(os, it->value(), indent);
+          if (++it == obj.end()) { break;
+}
           os << ",\n";
         }
       }
@@ -159,11 +162,12 @@ void pretty_print(std::ostream& os, boost::json::value const& jv,
       indent->append(4, ' ');
       auto const& arr = jv.get_array();
       if (!arr.empty()) {
-        auto it = arr.begin();
+        const auto *it = arr.begin();
         for (;;) {
           os << *indent;
-          pretty_print(os, *it, indent);
-          if (++it == arr.end()) break;
+          PrettyPrint(os, *it, indent);
+          if (++it == arr.end()) { break;
+}
           os << ",\n";
         }
       }
@@ -191,10 +195,11 @@ void pretty_print(std::ostream& os, boost::json::value const& jv,
       break;
 
     case boost::json::kind::bool_:
-      if (jv.get_bool())
+      if (jv.get_bool()) {
         os << "true";
-      else
+      } else {
         os << "false";
+}
       break;
 
     case boost::json::kind::null:
@@ -202,33 +207,34 @@ void pretty_print(std::ostream& os, boost::json::value const& jv,
       break;
   }
 
-  if (indent->empty()) os << "\n";
+  if (indent->empty()) { os << "\n";
+}
 }
 
-static void handle_response(const std::string& redpath,
-                            const std::shared_ptr<http::Client>&,
+static void HandleResponse(const std::string& redpath,
+                            const std::shared_ptr<http::Client>& /*unused*/,
                             http::Response&& res) {
-  std::string_view ct = res.getHeader(boost::beast::http::field::content_type);
+  std::string_view ct = res.GetHeader(boost::beast::http::field::content_type);
   if (ct != "application/json" && ct != "application/json; charset=utf-8") {
     return;
   }
   boost::system::error_code ec;
-  redpath_parser p(redpath);
-  p.write(res.body().data(), res.body().size(), ec);
+  RedpathParser p(redpath);
+  p.Write(res.Body().data(), res.Body().size(), ec);
 
   if (ec) {
     return;
   }
 }
 
-static void getRedpath(std::string_view host, uint16_t port,
+static void GetRedpath(std::string_view host, uint16_t port,
                        const std::shared_ptr<http::Client>& client,
                        std::string_view redpath) {
   boost::beast::http::fields headers;
-  client->sendData(
+  client->SendData(
       std::string(), host, port, "/redfish/v1", headers,
       boost::beast::http::verb::get,
-      std::bind_front(&handle_response, std::string(redpath), client));
+      std::bind_front(&HandleResponse, std::string(redpath), client));
 }
 
 int main(int argc, char** argv) {
@@ -242,10 +248,10 @@ int main(int argc, char** argv) {
   std::optional<int16_t> port = 443;
   app.add_option("--port", port, "Port to connect to");
 
-  app.add_option("--tls", policy.useTls, "Use TLS+HTTP");
+  app.add_option("--tls", policy.use_tls, "Use TLS+HTTP");
 
   if (!port) {
-    port = policy.useTls ? 443 : 80;
+    port = policy.use_tls ? 443 : 80;
   }
 
   app.add_option("--verify_server,!--no-verify-server",
@@ -270,11 +276,11 @@ int main(int argc, char** argv) {
   boost::asio::io_context ioc;
 
   std::shared_ptr<http::Client> http =
-      std::make_shared<http::Client>(ioc, std::move(policy));
+      std::make_shared<http::Client>(ioc, policy);
 
-  if (raw) {
+  if (raw != nullptr) {
     for (const std::string& redpath : redpaths) {
-      getRedpath(host, *port, http, redpath);
+      GetRedpath(host, *port, http, redpath);
     }
   } else {
   }

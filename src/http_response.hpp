@@ -16,19 +16,19 @@ class Connection;
 struct Response {
   template <typename Adaptor, typename Handler>
   friend class Connection;
-  using response_type =
+  using ResponseType =
       boost::beast::http::response<boost::beast::http::string_body>;
 
-  std::optional<response_type> stringResponse;
+  std::optional<response_type> string_response;
 
-  std::string_view getHeader(boost::beast::http::field key) {
-    return (*stringResponse)[key];
+  std::string_view GetHeader(boost::beast::http::field key) {
+    return (*string_response)[key];
   }
 
-  Response() : stringResponse(response_type{}) {}
+  Response() : string_response(response_type{}) {}
 
-  explicit Response(response_type&& stringResponseIn)
-      : stringResponse(stringResponseIn) {}
+  explicit Response(response_type&& string_response_in)
+      : string_response(string_response_in) {}
 
   ~Response() = default;
 
@@ -39,14 +39,14 @@ struct Response {
 
   Response& operator=(Response&& r) = delete;
 
-  boost::beast::http::status result() const { return stringResponse->result(); }
+  boost::beast::http::status Result() const { return string_response->result(); }
 
-  std::string& body() { return stringResponse->body(); }
+  std::string& Body() { return string_response->body(); }
 
-  std::string_view getHeaderValue(std::string_view key) const {
-    return stringResponse->base()[key];
+  std::string_view GetHeaderValue(std::string_view key) const {
+    return string_response->base()[key];
   }
 
-  void clear() { stringResponse.emplace(response_type{}); }
+  void Clear() { string_response.emplace(response_type{}); }
 };
 }  // namespace http
