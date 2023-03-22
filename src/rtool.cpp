@@ -142,8 +142,6 @@ class RedpathParser {
   explicit RedpathParser(std::string_view redpath)
       : p_(boost::json::parse_options(), redpath) {}
 
-  ~RedpathParser() = default;
-
   std::size_t Write(char const* data, std::size_t size,
                     boost::system::error_code& ec) {
     auto const n = p_.write_some(false, data, size, ec);
@@ -166,7 +164,7 @@ void PrettyPrint(std::ostream& os, boost::json::value const& jv,
       indent->append(4, ' ');
       auto const& obj = jv.get_object();
       if (!obj.empty()) {
-        const auto* it = obj.begin();
+        boost::json::object::const_iterator it = obj.begin();
         for (;;) {
           os << *indent << boost::json::serialize(it->key()) << " : ";
           PrettyPrint(os, it->value(), indent);
