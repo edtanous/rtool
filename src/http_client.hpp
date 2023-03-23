@@ -1,4 +1,7 @@
 #pragma once
+#include <fmt/core.h>
+#include <fmt/format.h>
+
 #include <boost/asio/connect.hpp>
 #include <boost/asio/experimental/channel.hpp>
 #include <boost/asio/experimental/concurrent_channel.hpp>
@@ -26,8 +29,6 @@
 #include <memory>
 #include <queue>
 #include <string>
-#include <fmt/core.h>
-#include <fmt/format.h>
 
 #include "http_response.hpp"
 
@@ -171,7 +172,7 @@ class ConnectionPool : public std::enable_shared_from_this<ConnectionPool> {
                  const std::shared_ptr<ConnectPolicy>& policy);
 
   ~ConnectionPool() {
-    //fmt::print("destroying connection {}\n", fmt::ptr(this));
+    // fmt::print("destroying connection {}\n", fmt::ptr(this));
     for (auto& connection : connections_) {
       auto conn = connection.lock();
       if (conn) {

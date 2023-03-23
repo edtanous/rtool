@@ -2,19 +2,29 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/json.hpp>
 #include <boost/json/basic_parser_impl.hpp>
+#include <limits>
 #include <optional>
 
 #include "boost_formatter.hpp"
 #include "http_client.hpp"
 
-
 // The null parser discards all the data
 class RedpathParser {
   // NOLINTBEGIN
   struct Handler {
-    explicit Handler(std::string_view redpath) : redpath(redpath) {}
-    std::string redpath;
-    bool redpath_match = true;
+    explicit Handler(std::vector<std::string>&& redpaths_in) {
+      for (const auto& redpath : redpaths_in) {
+        redpaths.emplace_back(std::move(redpath), "");
+      }
+    }
+    std::vector<std::pair<std::string, std::string>> release() {
+      return std::move(redpaths);
+    }
+
+    // Each redpath in order, as well as how many key strings have been matched
+    std::vector<std::pair<std::string, std::string>> redpaths;
+    std::string current_key;
+    std::string current_value;
     constexpr static std::size_t max_object_size = std::size_t(-1);
     constexpr static std::size_t max_array_size = std::size_t(-1);
     constexpr static std::size_t max_key_size = std::size_t(-1);
@@ -23,104 +33,69 @@ class RedpathParser {
     static bool on_document_begin(std::error_code& /*unused*/) { return true; }
     static bool on_document_end(std::error_code& /*unused*/) { return true; }
     bool on_object_begin(std::error_code& /*unused*/) {
-      if (!redpath_match) {
-        redpath_match = true;
-        return true;
-      }
-
+      current_key += "/";
       return true;
     }
-    static bool on_object_end(std::size_t /*unused*/,
-                              std::error_code& /*unused*/) {
+    bool on_object_end(std::size_t /*unused*/, std::error_code& /*unused*/) {
+      current_key = current_key.substr(0, current_key.find('/') - 1);
       return true;
     }
-    bool on_array_begin(std::error_code& /*unused*/) {
-      if (!redpath_match) {
-        redpath_match = true;
-        return true;
-      }
-
+    bool on_array_begin(std::error_code& /*unused*/) { return true; }
+    bool on_array_end(std::size_t /*unused*/, std::error_code& /*unused*/) {
       return true;
     }
-    static bool on_array_end(std::size_t /*unused*/,
-                             std::error_code& /*unused*/) {
-      return true;
-    }
-    bool on_key_part(std::string_view key, std::size_t key_size,
+    bool on_key_part(std::string_view key, std::size_t /*key_size*/,
                      std::error_code& /*unused*/) {
-      std::string_view sv(redpath);
-      bool sub_matches = sv.substr(key_size - key.size(), key.size()) == key;
-      redpath_match = redpath_match && sub_matches;
+      current_key += key;
       return true;
     }
     bool on_key(std::string_view key, std::size_t key_size,
                 std::error_code& ec) {
-      return on_key_part(key, key_size, ec);
+      if (!on_key_part(key, key_size, ec)) {
+        return false;
+      }
+      return true;
     }
     bool on_string_part(std::string_view str, std::size_t /*unused*/,
-                        std::error_code& /*unused*/) const {
-      if (redpath_match) {
-        fmt::print("{}", str);
-      }
+                        std::error_code& /*unused*/) {
+      current_value += str;
       return true;
     }
     bool on_string(std::string_view str, std::size_t str_size,
                    std::error_code& ec) {
-      if (!redpath_match) {
-        redpath_match = true;
+      if (!on_string_part(str, str_size, ec)) {
         return true;
       }
-      on_string_part(str, str_size, ec);
+      for (auto& redpath : redpaths) {
+        // fmt::print("checking {} == {}\n", redpath.first, current_key);
+        if (redpath.first == current_key) {
+          redpath.second = std::move(current_value);
+          break;
+        }
+      }
+      current_key = "";
+      current_value = "";
 
-      fmt::print("{}", "\n");
       return true;
     }
-    static bool on_number_part(std::string_view /*unused*/,
-                               std::error_code& /*unused*/) {
+    bool on_bool(bool /*unused*/, std::error_code& /*unused*/) { return true; }
+    bool on_number_part(std::string_view /*unused*/,
+                        std::error_code& /*unused*/) {
       return true;
     }
     bool on_int64(std::int64_t /*unused*/, std::string_view /*unused*/,
                   std::error_code& /*unused*/) {
-      if (!redpath_match) {
-        redpath_match = true;
-        return true;
-      }
-
       return true;
     }
     bool on_uint64(std::uint64_t /*unused*/, std::string_view /*unused*/,
                    std::error_code& /*unused*/) {
-      if (!redpath_match) {
-        redpath_match = true;
-        return true;
-      }
       return true;
     }
     bool on_double(double /*unused*/, std::string_view /*unused*/,
                    std::error_code& /*unused*/) {
-      if (!redpath_match) {
-        redpath_match = true;
-        return true;
-      }
-
       return true;
     }
-    bool on_bool(bool /*unused*/, std::error_code& /*unused*/) {
-      if (!redpath_match) {
-        redpath_match = true;
-        return true;
-      }
-
-      return true;
-    }
-    bool on_null(std::error_code& /*unused*/) {
-      if (!redpath_match) {
-        redpath_match = true;
-        return true;
-      }
-
-      return true;
-    }
+    bool on_null(std::error_code& /*unused*/) { return true; }
     static bool on_comment_part(std::string_view /*unused*/,
                                 std::error_code& /*unused*/) {
       return false;
@@ -135,8 +110,12 @@ class RedpathParser {
   boost::json::basic_parser<Handler> p_;
 
  public:
-  explicit RedpathParser(std::string_view redpath)
-      : p_(boost::json::parse_options(), redpath) {}
+  explicit RedpathParser(std::vector<std::string>&& redpaths)
+      : p_(boost::json::parse_options(), std::move(redpaths)) {}
+
+  std::vector<std::pair<std::string, std::string>> release() {
+    return p_.handler().release();
+  }
 
   std::size_t Write(char const* data, std::size_t size,
                     boost::system::error_code& ec) {
@@ -232,7 +211,7 @@ void PrettyPrint(std::ostream& os, boost::json::value const& jv,
   }
 }
 
-static void HandleResponse(const std::string& redpath,
+static void HandleResponse(std::vector<std::string> redpaths,
                            const std::shared_ptr<http::Client>& /*unused*/,
                            http::Response&& res) {
   std::string_view ct = res.GetHeader(boost::beast::http::field::content_type);
@@ -240,9 +219,12 @@ static void HandleResponse(const std::string& redpath,
     return;
   }
   boost::system::error_code ec;
-  RedpathParser p(redpath);
+  RedpathParser p(std::move(redpaths));
   p.Write(res.Body().data(), res.Body().size(), ec);
-
+  auto redpaths_out = p.release();
+  for (auto& redpath : redpaths_out) {
+    fmt::print("{}={}\n", redpath.first, redpath.second);
+  }
   if (ec) {
     return;
   }
@@ -250,12 +232,12 @@ static void HandleResponse(const std::string& redpath,
 
 static void GetRedpath(std::string_view host, uint16_t port,
                        const std::shared_ptr<http::Client>& client,
-                       std::string_view redpath) {
+                       std::vector<std::string>&& redpaths) {
   boost::beast::http::fields headers;
   client->SendData(
       std::string(), host, port, "/redfish/v1", headers,
       boost::beast::http::verb::get,
-      std::bind_front(&HandleResponse, std::string(redpath), client));
+      std::bind_front(&HandleResponse, std::move(redpaths), client));
 }
 
 int main(int argc, char** argv) {
@@ -299,9 +281,7 @@ int main(int argc, char** argv) {
       std::make_shared<http::Client>(ioc, policy);
 
   if (raw != nullptr) {
-    for (const std::string& redpath : redpaths) {
-      GetRedpath(host, *port, http, redpath);
-    }
+    GetRedpath(host, *port, http, std::move(redpaths));
   } else {
   }
   http.reset();
