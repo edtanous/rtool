@@ -13,18 +13,22 @@
 class RedpathParser {
   // Handler methods don't follow the naming convention.
   // NOLINTBEGIN
+  struct MatchedProperty {
+    std::string key_path;
+    std::string value;
+  };
   struct Handler {
     explicit Handler(std::vector<std::string>&& redpaths_in) {
       for (const auto& redpath : redpaths_in) {
         redpaths.emplace_back(std::move(redpath), "");
       }
     }
-    std::vector<std::pair<std::string, std::string>> release() {
+    std::vector<MatchedProperty> release() {
       return std::move(redpaths);
     }
 
     // Each redpath in order, as well as how many key strings have been matched
-    std::vector<std::pair<std::string, std::string>> redpaths;
+    std::vector<MatchedProperty> redpaths;
     std::string current_key;
     std::string current_value;
     constexpr static std::size_t max_object_size = std::size_t(-1);
@@ -66,12 +70,13 @@ class RedpathParser {
     bool on_string(std::string_view str, std::size_t str_size,
                    std::error_code& ec) {
       if (!on_string_part(str, str_size, ec)) {
-        return true;
+        return false;
       }
+
       for (auto& redpath : redpaths) {
         // fmt::print("checking {} == {}\n", redpath.first, current_key);
-        if (redpath.first == current_key) {
-          redpath.second = std::move(current_value);
+        if (redpath.key_path == current_key) {
+          redpath.value = std::move(current_value);
           break;
         }
       }
@@ -115,7 +120,7 @@ class RedpathParser {
   explicit RedpathParser(std::vector<std::string>&& redpaths)
       : p_(boost::json::parse_options(), std::move(redpaths)) {}
 
-  std::vector<std::pair<std::string, std::string>> release() {
+  std::vector<MatchedProperty> release() {
     return p_.handler().release();
   }
 
@@ -141,7 +146,7 @@ static void HandleResponse(std::vector<std::string> redpaths,
   p.Write(res.Body().data(), res.Body().size(), ec);
   auto redpaths_out = p.release();
   for (auto& redpath : redpaths_out) {
-    fmt::print("{}={}\n", redpath.first, redpath.second);
+    fmt::print("{}={}\n", redpath.key_path, redpath.value);
   }
   if (ec) {
     return;
@@ -156,6 +161,27 @@ static void GetRedpath(std::string_view host, uint16_t port,
       std::string(), host, port, "/redfish/v1", headers,
       boost::beast::http::verb::get,
       std::bind_front(&HandleResponse, std::move(redpaths), client));
+}
+
+bool TransformRedpaths(std::span<std::string> redpaths){
+  for (std::string& redpath: redpaths){
+    if (redpath.find("@odata.") != std::string::npos){
+      fmt::print("Property queries cannot include odata metadata");
+      return false;
+    }
+
+    size_t index = 0;
+    while (true) {
+      constexpr std::string_view collection("[*]");
+      index = redpath.find(collection, index);
+      if (index == std::string::npos) {break;};
+
+      constexpr std::string_view odata("/@odata.id");
+      redpath.replace(index, collection.size(), odata);
+      index += odata.size();
+    }
+  }
+  return true;
 }
 
 int main(int argc, char** argv) {
@@ -199,6 +225,9 @@ int main(int argc, char** argv) {
       std::make_shared<http::Client>(ioc, policy);
 
   if (raw != nullptr) {
+    if (!TransformRedpaths(redpaths)){
+      return EXIT_FAILURE;
+    }
     GetRedpath(host, *port, http, std::move(redpaths));
   } else {
   }
