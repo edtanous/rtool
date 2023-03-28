@@ -53,6 +53,11 @@ add_global_arguments(
   # Make the build reproducible by removing filename logging
   '-DBOOST_URL_NO_SOURCE_LOCATION',
   '-DOPENSSL_NO_FILENAMES',
+
+  # Enable boost spirit options for debug
+  '-DBOOST_SPIRIT_X3_NO_RTTI',
+  '-DBOOST_SPIRIT_DEBUG',
+  '-DBOOST_SPIRIT_DEBUG_OUT',
   language : 'cpp'
 )
 
@@ -84,12 +89,6 @@ if not boost.found()
 endif
 rtool_dependencies += boost.as_system()
 
-summary(
-  {
-    'prefix' : get_option('prefix'),
-  },
-  section : 'Directories'
-)
 
 # Source files
 srcfiles_rtool= [
@@ -98,14 +97,43 @@ srcfiles_rtool= [
   'src/boost_beast.cpp',
   'src/boost_json.cpp',
   'src/http_client.cpp',
-  'src/rtool.cpp',
+  'src/path_parser.cpp',
 ]
+
+
+rtoollib = static_library(
+  'rtoollib',
+  srcfiles_rtool,
+  dependencies: rtool_dependencies,
+)
 
 # Generate the rtool executable
 executable(
   'rtool',
-  srcfiles_rtool,
+  ['src/rtool.cpp'] + srcfiles_rtool,
+  link_with: rtoollib,
   dependencies: rtool_dependencies,
   install: true,
 )
 
+if(get_option('tests').enabled())
+  gtest = dependency('gtest', main: true,disabler: true, required : false)
+  gmock = dependency('gmock', required : false)
+  if not gtest.found() and get_option('tests').enabled()
+    gtest_proj = subproject('gtest', required: true)
+    gtest = gtest_proj.get_variable('gtest_main_dep')
+    gmock = gtest_proj.get_variable('gmock_dep')
+  endif
+  gtest = gtest.as_system('system')
+  gmock = gmock.as_system('system')
+  test_bin = executable(
+    'path_parser_test',
+    'src/path_parser_test.cpp',
+    link_with: rtoollib,
+    dependencies: [
+      gtest,
+      gmock,
+    ]
+  )
+  test('path_parser', test_bin)
+endif
