@@ -6,6 +6,7 @@
 #include <string>
 
 #include "path_parser_ast.hpp"
+#include "path_parser_internal.hpp"
 
 namespace redfish {
 namespace ast {
