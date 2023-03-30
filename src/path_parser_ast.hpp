@@ -1,7 +1,5 @@
 #pragma once
 #include <iostream>
-#include <list>
-#include <numeric>
 #include <string>
 #include <variant>
 #include <vector>
