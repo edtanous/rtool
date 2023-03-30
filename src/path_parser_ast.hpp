@@ -11,21 +11,24 @@ namespace redfish {
 namespace filter_ast {
 
 // Represents a string that matches an identifier
-struct key_name : std::string {};
+struct key_name : std::string {
+  // key_name(std::string_view key): std::string(key){}
+  auto operator<=>(const key_name&) const = default;
+};
 
-// An expression that has been negated with not()
-struct key_filter {
-  key_name key;
+struct key_filter : std::string {
   auto operator<=>(const key_filter&) const = default;
 };
 
+using path_component = std::variant<key_name, key_filter>;
+
 struct path {
-  std::vector<key_filter> filters;
+  std::vector<path_component> filters;
   auto operator<=>(const path&) const = default;
 };
 
 }  // namespace filter_ast
 }  // namespace redfish
 
-BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::key_filter, key)
+// BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::key_filter, key)
 BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::path, filters)

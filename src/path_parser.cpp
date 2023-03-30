@@ -15,7 +15,9 @@ namespace ast {
 struct printer {
   typedef void result_type;
 
-  void operator()(filter_ast::key_filter const& x) const { std::cout << x.key; }
+  void operator()(
+      filter_ast::key_filter const& /*x*/) const {  // std::cout << x.key;
+  }
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -24,7 +26,9 @@ struct printer {
 struct eval {
   typedef int result_type;
 
-  void operator()(filter_ast::key_filter const& x) const { std::cout << x.key; }
+  void operator()(
+      filter_ast::key_filter const& /*x*/) const {  // std::cout << x.key;
+  }
 };
 }  // namespace ast
 }  // namespace redfish
@@ -34,10 +38,9 @@ std::optional<redfish::filter_ast::path> parseFilterExpression(
   auto& calc = redfish::filter_grammar::grammar;
   redfish::filter_ast::path program;
 
-  boost::spirit::x3::ascii::space_type space;
   std::string_view::iterator iter = expr.begin();
   const std::string_view::iterator end = expr.end();
-  bool r = boost::spirit::x3::phrase_parse(iter, end, calc, space, program);
+  bool r = boost::spirit::x3::parse(iter, end, calc, program);
 
   if (!r) {
     std::cout << "Parsing failed\n";
