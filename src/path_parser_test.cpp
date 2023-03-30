@@ -22,4 +22,9 @@ TEST(FilterParser, BasicTypes) {
               Optional(FieldsAre(VariantWith<key_filter>(key_filter{
                                      .key = "Chassis", .filter = '*'}),
                                  IsEmpty())));
+  EXPECT_THAT(
+      parseFilterExpression("Chassis[*]/Sensors"),
+      Optional(FieldsAre(
+          VariantWith<key_filter>(key_filter{.key = "Chassis", .filter = '*'}),
+          ElementsAre(VariantWith<key_name>(key_name("Sensors"))))));
 }
