@@ -23,6 +23,7 @@ struct key_filter {
 using path_component = std::variant<key_name, key_filter>;
 
 struct path {
+  path_component first;
   std::vector<path_component> filters;
   auto operator<=>(const path&) const = default;
 };
@@ -45,4 +46,4 @@ inline std::ostream& operator<<(std::ostream& os, const path& path) {
 }  // namespace redfish
 
 BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::key_filter, key, filter)
-BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::path, filters)
+BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::path, first, filters)

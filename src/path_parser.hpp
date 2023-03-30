@@ -24,7 +24,7 @@ auto const expression_def = key_name >> lit('[') >> char_('*') >> lit(']');
 
 auto const path_component_def = (expression | key_name);
 
-auto const path_def = +(path_component);
+auto const path_def = path_component >> *(lit('/') >> path_component);
 
 BOOST_SPIRIT_DEFINE(key_name, expression, path_component, path);
 
