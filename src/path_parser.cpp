@@ -34,7 +34,7 @@ struct eval {
 }  // namespace ast
 }  // namespace redfish
 
-std::optional<redfish::filter_ast::path> parseFilterExpression(
+std::optional<redfish::filter_ast::path> parseRedfishPath(
     std::string_view expr) {
   auto& calc = redfish::filter_grammar::grammar;
   redfish::filter_ast::path program;

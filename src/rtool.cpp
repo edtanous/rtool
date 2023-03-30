@@ -7,6 +7,7 @@
 
 #include "boost_formatter.hpp"
 #include "http_client.hpp"
+#include "path_parser.hpp"
 #include "json.hpp"
 
 // The null parser discards all the data
@@ -223,6 +224,13 @@ int main(int argc, char** argv) {
       std::make_shared<http::Client>(ioc, policy);
 
   if (raw != nullptr) {
+    for (const auto& redpath: redpaths){
+     std::optional<redfish::filter_ast::path> path = parseRedfishPath(redpath);
+      if (!path){
+        fmt::print("Path {} was not valid\n", redpath);
+        return EXIT_FAILURE;
+      }
+    }
     if (!TransformRedpaths(redpaths)) {
       return EXIT_FAILURE;
     }
