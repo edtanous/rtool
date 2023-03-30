@@ -20,8 +20,7 @@ using boost::spirit::x3::lit;
 
 auto const key_name_def = char_("A-Z") >> *(char_("a-zA-Z0-9"));
 
-auto const expression_def = char_("A-Z") >> *(char_("a-zA-Z0-9")) >> lit('[') >>
-                            lit('*') >> lit(']');
+auto const expression_def = key_name >> lit('[') >> char_('*') >> lit(']');
 
 auto const path_component_def = (expression | key_name);
 

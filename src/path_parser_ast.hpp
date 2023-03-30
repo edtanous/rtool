@@ -12,14 +12,14 @@ namespace filter_ast {
 
 // Represents a string that matches an identifier
 struct key_name : std::string {
-  // key_name(std::string_view key): std::string(key){}
   auto operator<=>(const key_name&) const = default;
 };
 
-struct key_filter : std::string {
+struct key_filter {
+  std::string key;
+  char filter;
   auto operator<=>(const key_filter&) const = default;
 };
-
 using path_component = std::variant<key_name, key_filter>;
 
 struct path {
@@ -27,8 +27,22 @@ struct path {
   auto operator<=>(const path&) const = default;
 };
 
+inline std::ostream& operator<<(std::ostream& os, const key_filter& filt) {
+  os << filt.key;
+  return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const path& path) {
+  os << "path[";
+  for (const auto& filter : path.filters) {
+    std::visit([&os](auto&& out) { os << out << ','; }, filter);
+  }
+  os << ']';
+  return os;
+}
+
 }  // namespace filter_ast
 }  // namespace redfish
 
-// BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::key_filter, key)
+BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::key_filter, key, filter)
 BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::path, filters)

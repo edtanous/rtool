@@ -13,13 +13,11 @@ TEST(FilterParser, BasicTypes) {
   // Basic number types
   using redfish::filter_ast::key_name;
   EXPECT_THAT(parseFilterExpression("Chassis"),
-              Optional(FieldsAre(ElementsAre(
-                  // expected
-                  VariantWith<key_name>(key_name("Chassis"))))));
+              Optional(FieldsAre(
+                  ElementsAre(VariantWith<key_name>(key_name("Chassis"))))));
 
   using redfish::filter_ast::key_filter;
-  key_filter expected("Chassis");
   EXPECT_THAT(parseFilterExpression("Chassis[*]"),
-              Optional(FieldsAre(ElementsAre(
-                  VariantWith<key_filter>(key_filter("Chassis"))))));
+              Optional(FieldsAre(ElementsAre(VariantWith<key_filter>(
+                  key_filter{.key = "Chassis", .filter = '*'})))));
 }

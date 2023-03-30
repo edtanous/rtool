@@ -39,13 +39,13 @@ std::optional<redfish::filter_ast::path> parseFilterExpression(
   redfish::filter_ast::path program;
 
   std::string_view::iterator iter = expr.begin();
-  const std::string_view::iterator end = expr.end();
-  bool r = boost::spirit::x3::parse(iter, end, calc, program);
+  bool r = boost::spirit::x3::parse(iter, expr.end(), calc, program);
 
-  if (!r) {
+  if (!r || iter != expr.end()) {
     std::cout << "Parsing failed\n";
-    std::string rest(iter, end);
+    std::string rest(iter, expr.end());
     std::cout << "stopped at: \"" << rest << "\"\n";
+    return std::nullopt;
   }
   return program;
 }
