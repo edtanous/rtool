@@ -98,8 +98,8 @@ srcfiles_rtool= [
   'src/boost_json.cpp',
   'src/http_client.cpp',
   'src/path_parser.cpp',
+  'src/path_parser_ast.cpp',
 ]
-
 
 rtoollib = static_library(
   'rtoollib',

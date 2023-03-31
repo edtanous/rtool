@@ -26,30 +26,10 @@ struct path {
   std::vector<path_component> filters;
   auto operator<=>(const path&) const = default;
 
-  void append_path(std::string& path_str, const path_component& path) {
-    struct VisitPath {
-      std::string& str_;
-      VisitPath(std::string& str) : str_(str) {}
-      void operator()(const key_filter& p) {
-        str_ += p.key;
-        str_ += '[';
-        str_ += p.filter;
-        str_ += ']';
-      }
-      void operator()(const key_name& p) { str_ += p; }
-    };
-    std::visit(VisitPath(path_str), path);
-  }
+  void append_path(std::string& path_str, const path_component& path);
 
-  std::string to_path_string() {
-    std::string ret;
-    append_path(ret, first);
-    for (const path_component& p : filters) {
-      ret += '/';
-      append_path(ret, p);
-    }
-    return ret;
-  }
+  std::string to_path_string();
+
 };
 
 }  // namespace filter_ast
