@@ -30,6 +30,7 @@ struct path {
 
   std::string to_path_string();
 
+  path strip_parent();
 };
 
 }  // namespace filter_ast
