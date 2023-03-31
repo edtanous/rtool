@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -30,7 +31,7 @@ struct path {
 
   std::string to_path_string();
 
-  path strip_parent();
+  std::optional<path> strip_parent() const;
 };
 
 }  // namespace filter_ast

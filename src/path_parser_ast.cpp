@@ -25,11 +25,13 @@ std::string path::to_path_string() {
   return ret;
 }
 
-path path::strip_parent() {
-  path ret{
+std::optional<path> path::strip_parent() const {
+  if (filters.empty()) {
+    return std::nullopt;
+  }
+  return path{
       .first = filters[0],
       .filters = {filters.begin() + 1, filters.end()},
   };
-  return ret;
 }
 }  // namespace redfish::filter_ast

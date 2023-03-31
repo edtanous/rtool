@@ -152,8 +152,11 @@ static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
             std::get_if<redfish::filter_ast::key_filter>(
                 &redpath.key_path.first)) {
       if (filter->filter == '*') {
-        fmt::print("Resolving {}",
-                   redpath.key_path.strip_parent().to_path_string());
+        std::optional<redfish::filter_ast::path> parent =
+            redpath.key_path.strip_parent();
+        if (parent) {
+          fmt::print("Resolving {}", parent->to_path_string());
+        }
       }
     } else if (!redpath.value.empty()) {
       fmt::print("{}={}\n", redpath.key_path.to_path_string(), redpath.value);
