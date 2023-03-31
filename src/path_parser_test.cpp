@@ -28,3 +28,8 @@ TEST(FilterParser, BasicTypes) {
           VariantWith<key_filter>(key_filter{.key = "Chassis", .filter = '*'}),
           ElementsAre(VariantWith<key_name>(key_name("Sensors"))))));
 }
+
+TEST(FilterParser, StringRoundTrip) {
+  EXPECT_EQ(parseRedfishPath("Chassis[*]/Sensors")->to_path_string(),
+            "Chassis[*]/Sensors");
+}

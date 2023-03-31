@@ -148,7 +148,7 @@ static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
   p.Write(res.Body().data(), res.Body().size(), ec);
   auto redpaths_out = p.release();
   for (auto& redpath : redpaths_out) {
-    fmt::print("{}={}\n", redpath.key_path, redpath.value);
+    fmt::print("{}={}\n", redpath.key_path.to_path_string(), redpath.value);
   }
   if (ec) {
     return;
