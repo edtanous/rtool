@@ -7,19 +7,20 @@
 
 #include "boost_formatter.hpp"
 #include "http_client.hpp"
-#include "path_parser.hpp"
 #include "json.hpp"
+#include "path_parser.hpp"
+#include "path_parser_fmt_printers.hpp"
 
 // The null parser discards all the data
 class RedpathParser {
   // Handler methods don't follow the naming convention.
   // NOLINTBEGIN
   struct MatchedProperty {
-    std::string key_path;
+    redfish::filter_ast::path key_path;
     std::string value;
   };
   struct Handler {
-    explicit Handler(std::vector<std::string>&& redpaths_in) {
+    explicit Handler(std::vector<redfish::filter_ast::path>&& redpaths_in) {
       for (const auto& redpath : redpaths_in) {
         redpaths.emplace_back(std::move(redpath), "");
       }
@@ -74,9 +75,13 @@ class RedpathParser {
 
       for (auto& redpath : redpaths) {
         // fmt::print("checking {} == {}\n", redpath.first, current_key);
-        if (redpath.key_path == current_key) {
-          redpath.value = std::move(current_value);
-          break;
+        if (const redfish::filter_ast::key_name* match =
+                std::get_if<redfish::filter_ast::key_name>(
+                    &redpath.key_path.first)) {
+          if (*match == current_key) {
+            redpath.value = std::move(current_value);
+            break;
+          }
         }
       }
       current_key = "";
@@ -116,7 +121,7 @@ class RedpathParser {
   boost::json::basic_parser<Handler> p_;
 
  public:
-  explicit RedpathParser(std::vector<std::string>&& redpaths)
+  explicit RedpathParser(std::vector<redfish::filter_ast::path>&& redpaths)
       : p_(boost::json::parse_options(), std::move(redpaths)) {}
 
   std::vector<MatchedProperty> release() { return p_.handler().release(); }
@@ -131,7 +136,7 @@ class RedpathParser {
   }
 };
 
-static void HandleResponse(std::vector<std::string> redpaths,
+static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
                            const std::shared_ptr<http::Client>& /*unused*/,
                            http::Response&& res) {
   std::string_view ct = res.GetHeader(boost::beast::http::field::content_type);
@@ -152,7 +157,7 @@ static void HandleResponse(std::vector<std::string> redpaths,
 
 static void GetRedpath(std::string_view host, uint16_t port,
                        const std::shared_ptr<http::Client>& client,
-                       std::vector<std::string>&& redpaths) {
+                       std::vector<redfish::filter_ast::path>&& redpaths) {
   boost::beast::http::fields headers;
   client->SendData(
       std::string(), host, port, "/redfish/v1", headers,
@@ -224,17 +229,16 @@ int main(int argc, char** argv) {
       std::make_shared<http::Client>(ioc, policy);
 
   if (raw != nullptr) {
-    for (const auto& redpath: redpaths){
-     std::optional<redfish::filter_ast::path> path = parseRedfishPath(redpath);
-      if (!path){
+    std::vector<redfish::filter_ast::path> paths;
+    for (const auto& redpath : redpaths) {
+      std::optional<redfish::filter_ast::path> path = parseRedfishPath(redpath);
+      if (!path) {
         fmt::print("Path {} was not valid\n", redpath);
         return EXIT_FAILURE;
       }
+      paths.emplace_back(std::move(*path));
     }
-    if (!TransformRedpaths(redpaths)) {
-      return EXIT_FAILURE;
-    }
-    GetRedpath(host, *port, http, std::move(redpaths));
+    GetRedpath(host, *port, http, std::move(paths));
   } else {
   }
   http.reset();

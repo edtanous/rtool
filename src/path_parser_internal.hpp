@@ -1,13 +1,8 @@
 #pragma once
 
-#include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/spirit/home/x3.hpp>
-#include <boost/spirit/home/x3/support/ast/variant.hpp>
 
 #include "path_parser_ast.hpp"
-
-BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::key_filter, key, filter)
-BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::path, first, filters)
 
 namespace redfish::filter_grammar {
 

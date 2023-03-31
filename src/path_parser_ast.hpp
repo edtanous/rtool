@@ -1,4 +1,5 @@
 #pragma once
+#include <boost/fusion/include/adapt_struct.hpp>
 #include <iostream>
 #include <string>
 #include <variant>
@@ -17,6 +18,7 @@ struct key_filter {
   char filter;
   auto operator<=>(const key_filter&) const = default;
 };
+
 using path_component = std::variant<key_name, key_filter>;
 
 struct path {
@@ -25,20 +27,7 @@ struct path {
   auto operator<=>(const path&) const = default;
 };
 
-inline std::ostream& operator<<(std::ostream& os, const key_filter& filt) {
-  os << filt.key;
-  return os;
-}
-
-inline std::ostream& operator<<(std::ostream& os, const path& path) {
-  os << "path[";
-  std::visit([&os](auto&& out) { os << out << ','; }, path.first);
-  for (const auto& filter : path.filters) {
-    std::visit([&os](auto&& out) { os << out << ','; }, filter);
-  }
-  os << ']';
-  return os;
-}
-
 }  // namespace filter_ast
 }  // namespace redfish
+BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::key_filter, key, filter)
+BOOST_FUSION_ADAPT_STRUCT(redfish::filter_ast::path, first, filters)
