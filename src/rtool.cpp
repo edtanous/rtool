@@ -165,29 +165,6 @@ static void GetRedpath(std::string_view host, uint16_t port,
       std::bind_front(&HandleResponse, std::move(redpaths), client));
 }
 
-bool TransformRedpaths(std::span<std::string> redpaths) {
-  for (std::string& redpath : redpaths) {
-    if (redpath.find("@odata.") != std::string::npos) {
-      fmt::print("Property queries cannot include odata metadata");
-      return false;
-    }
-
-    size_t index = 0;
-    while (true) {
-      constexpr std::string_view collection("[*]");
-      index = redpath.find(collection, index);
-      if (index == std::string::npos) {
-        break;
-      };
-
-      constexpr std::string_view odata("/@odata.id");
-      redpath.replace(index, collection.size(), odata);
-      index += odata.size();
-    }
-  }
-  return true;
-}
-
 int main(int argc, char** argv) {
   CLI::App app{"Redfish access tool"};
 
