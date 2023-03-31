@@ -148,7 +148,16 @@ static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
   p.Write(res.Body().data(), res.Body().size(), ec);
   auto redpaths_out = p.release();
   for (auto& redpath : redpaths_out) {
-    fmt::print("{}={}\n", redpath.key_path.to_path_string(), redpath.value);
+    if (const redfish::filter_ast::key_filter* filter =
+            std::get_if<redfish::filter_ast::key_filter>(
+                &redpath.key_path.first)) {
+      if (filter->filter == '*') {
+        fmt::print("Resolving {}",
+                   redpath.key_path.strip_parent().to_path_string());
+      }
+    } else if (!redpath.value.empty()) {
+      fmt::print("{}={}\n", redpath.key_path.to_path_string(), redpath.value);
+    }
   }
   if (ec) {
     return;
