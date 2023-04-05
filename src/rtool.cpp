@@ -155,7 +155,9 @@ static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
         std::optional<redfish::filter_ast::path> parent =
             redpath.key_path.strip_parent();
         if (parent) {
-          fmt::print("Resolving {}", parent->to_path_string());
+          fmt::print("Resolving {}\n", parent->to_path_string());
+        } else {
+          fmt::print("Couldn't resolve parent of {}\n", redpath.key_path.to_path_string());
         }
       }
     } else if (!redpath.value.empty()) {
