@@ -1,5 +1,6 @@
 #include <CLI/CLI.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/beast/core/detail/base64.hpp>
 #include <boost/json.hpp>
 #include <boost/json/basic_parser_impl.hpp>
 #include <limits>
@@ -83,6 +84,13 @@ class RedpathParser {
             break;
           }
         }
+        if (const redfish::filter_ast::key_filter* path =
+                std::get_if<redfish::filter_ast::key_filter>(
+                    &redpath.key_path.first)) {
+          if (path->key + "/@odata.id" == current_key) {
+            redpath.value = std::move(current_value);
+          }
+        }
       }
       current_key = "";
       current_value = "";
@@ -136,9 +144,22 @@ class RedpathParser {
   }
 };
 
+struct HostConnectData {
+  std::string host;
+  uint16_t port = 443;
+  std::string username;
+  std::string password;
+};
+
+static void GetRedpath(const std::string& base_uri, HostConnectData host,
+                       const std::shared_ptr<http::Client>& client,
+                       std::vector<redfish::filter_ast::path>&& redpaths);
+
 static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
-                           const std::shared_ptr<http::Client>& /*unused*/,
+                           const std::shared_ptr<http::Client>& client,
+                           HostConnectData host,
                            http::Response&& res) {
+  fmt::print("Got response {}\n", res.Body());
   std::string_view ct = res.GetHeader(boost::beast::http::field::content_type);
   if (ct != "application/json" && ct != "application/json; charset=utf-8") {
     return;
@@ -156,8 +177,12 @@ static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
             redpath.key_path.strip_parent();
         if (parent) {
           fmt::print("Resolving {}\n", parent->to_path_string());
+          std::vector<redfish::filter_ast::path> new_paths;
+          new_paths.push_back(*parent);
+          GetRedpath(redpath.value, host, client, std::move(new_paths));
         } else {
-          fmt::print("Couldn't resolve parent of {}\n", redpath.key_path.to_path_string());
+          fmt::print("Couldn't resolve parent of {}\n",
+                     redpath.key_path.to_path_string());
         }
       }
     } else if (!redpath.value.empty()) {
@@ -169,14 +194,21 @@ static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
   }
 }
 
-static void GetRedpath(std::string_view host, uint16_t port,
+static void GetRedpath(const std::string& base_uri, HostConnectData host,
                        const std::shared_ptr<http::Client>& client,
                        std::vector<redfish::filter_ast::path>&& redpaths) {
   boost::beast::http::fields headers;
-  client->SendData(
-      std::string(), host, port, "/redfish/v1", headers,
-      boost::beast::http::verb::get,
-      std::bind_front(&HandleResponse, std::move(redpaths), client));
+  std::string auth = host.username + ":" + host.password;
+  std::string auth_out;
+  auth_out.resize(boost::beast::detail::base64::encoded_size(auth.size()));
+  auth_out.resize(boost::beast::detail::base64::encode(
+      auth_out.data(), auth.data(), auth.size()));
+  fmt::print("Got base64 {}\n", auth_out);
+  headers.set(boost::beast::http::field::authorization, "Basic " + auth_out);
+  client->SendData(std::string(), host.host, host.port, base_uri, headers,
+                   boost::beast::http::verb::get,
+                   std::bind_front(&HandleResponse, std::move(redpaths), client,
+                                   host));
 }
 
 int main(int argc, char** argv) {
@@ -184,16 +216,22 @@ int main(int argc, char** argv) {
 
   http::ConnectPolicy policy;
 
-  std::string host;
-  app.add_option("--host", host, "Host to connect to");
+  HostConnectData host;
+  app.add_option("--host", host.host, "Host to connect to");
 
-  std::optional<int16_t> port = 443;
+  app.add_option("--user", host.username, "Username to use");
+
+  app.add_option("--pass", host.password, "Password to use");
+
+  std::optional<uint16_t> port;
   app.add_option("--port", port, "Port to connect to");
 
   app.add_option("--tls", policy.use_tls, "Use TLS+HTTP");
 
   if (!port) {
-    port = policy.use_tls ? 443 : 80;
+    host.port = policy.use_tls ? 443 : 80;
+  } else {
+    host.port = *port;
   }
 
   app.add_option("--verify_server,!--no-verify-server",
@@ -229,7 +267,7 @@ int main(int argc, char** argv) {
       }
       paths.emplace_back(std::move(*path));
     }
-    GetRedpath(host, *port, http, std::move(paths));
+    GetRedpath("/redfish/v1", host, http, std::move(paths));
   } else {
   }
   http.reset();

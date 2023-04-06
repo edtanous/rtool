@@ -191,13 +191,14 @@ void ConnectionInfo::AfterRead(const std::shared_ptr<ConnectionInfo>& /*self*/,
 
   // Copy the response into a Response object so that it can be
   // processed by the callback function.
+  bool keep_alive = parser_->get().keep_alive();
   callback_(Response(parser_->release()));
 
   // Callback has served its purpose, let it destruct
   callback_ = nullptr;
 
   // Is more data is now loaded for the next request?
-  if (parser_->keep_alive()) {
+  if (keep_alive) {
     SendMessage();
   } else {
     // Server is not keep-alive enabled so we need to close the
@@ -448,6 +449,7 @@ void Client::SendData(std::string&& data, std::string_view dest_ip,
   client_key += dest_ip;
   client_key += ":";
   client_key += std::to_string(dest_port);
+  fmt::print("Requesting {}{}\n", client_key, dest_uri);
   // Use nullptr to avoid creating a ConnectionPool each time
   std::shared_ptr<ConnectionPool>& conn = connectionPools_[client_key];
   if (conn == nullptr) {
