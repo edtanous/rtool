@@ -15,6 +15,7 @@ void path::append_path(std::string& path_str, const path_component& path) {
   };
   std::visit(VisitPath(path_str), path);
 }
+
 std::string path::to_path_string() {
   std::string ret;
   append_path(ret, first);
@@ -29,6 +30,16 @@ std::optional<path> path::strip_parent() const {
   if (filters.empty()) {
     return std::nullopt;
   }
+
+  if (const key_filter* p = std::get_if<key_filter>(&first)) {
+    if (p->key != "" && p->filter == '*') {
+      key_filter filter{.key = "", .filter = p->filter};
+
+      path foo{.first = filter, .filters = filters};
+      return foo;
+    }
+  }
+
   return path{
       .first = filters[0],
       .filters = {filters.begin() + 1, filters.end()},

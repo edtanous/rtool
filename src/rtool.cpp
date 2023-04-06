@@ -157,8 +157,7 @@ static void GetRedpath(const std::string& base_uri, HostConnectData host,
 
 static void HandleResponse(std::vector<redfish::filter_ast::path> redpaths,
                            const std::shared_ptr<http::Client>& client,
-                           HostConnectData host,
-                           http::Response&& res) {
+                           HostConnectData host, http::Response&& res) {
   fmt::print("Got response {}\n", res.Body());
   std::string_view ct = res.GetHeader(boost::beast::http::field::content_type);
   if (ct != "application/json" && ct != "application/json; charset=utf-8") {
@@ -205,10 +204,10 @@ static void GetRedpath(const std::string& base_uri, HostConnectData host,
       auth_out.data(), auth.data(), auth.size()));
   fmt::print("Got base64 {}\n", auth_out);
   headers.set(boost::beast::http::field::authorization, "Basic " + auth_out);
-  client->SendData(std::string(), host.host, host.port, base_uri, headers,
-                   boost::beast::http::verb::get,
-                   std::bind_front(&HandleResponse, std::move(redpaths), client,
-                                   host));
+  client->SendData(
+      std::string(), host.host, host.port, base_uri, headers,
+      boost::beast::http::verb::get,
+      std::bind_front(&HandleResponse, std::move(redpaths), client, host));
 }
 
 int main(int argc, char** argv) {
