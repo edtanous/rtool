@@ -39,10 +39,11 @@ TEST(FilterParser, StringRoundTrip) {
 TEST(FilterParser, ParentPath) {
   std::optional<redfish::filter_ast::path> p =
       parseRedfishPath("Chassis[*]/Sensors")->strip_parent();
-  EXPECT_THAT(p,
-              Optional(FieldsAre(
-                  VariantWith<key_filter>(key_filter{.key = "", .filter = '*'}),
-                  ElementsAre(VariantWith<key_name>(key_name("Sensors"))))));
+  EXPECT_THAT(
+      p,
+      Optional(FieldsAre(
+          VariantWith<key_filter>(key_filter{.key = "Members", .filter = '*'}),
+          ElementsAre(VariantWith<key_name>(key_name("Sensors"))))));
   EXPECT_THAT(p->strip_parent(),
               Optional(FieldsAre(VariantWith<key_name>(key_name("Sensors")),
                                  IsEmpty())));

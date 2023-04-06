@@ -32,8 +32,8 @@ std::optional<path> path::strip_parent() const {
   }
 
   if (const key_filter* p = std::get_if<key_filter>(&first)) {
-    if (p->key != "" && p->filter == '*') {
-      key_filter filter{.key = "", .filter = p->filter};
+    if (p->key != "Members" && p->filter == '*') {
+      key_filter filter{.key = "Members", .filter = p->filter};
 
       path foo{.first = filter, .filters = filters};
       return foo;

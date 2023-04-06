@@ -449,7 +449,7 @@ void Client::SendData(std::string&& data, std::string_view dest_ip,
   client_key += dest_ip;
   client_key += ":";
   client_key += std::to_string(dest_port);
-  fmt::print("Requesting {}{}\n", client_key, dest_uri);
+  //fmt::print("Requesting {}{}\n", client_key, dest_uri);
   // Use nullptr to avoid creating a ConnectionPool each time
   std::shared_ptr<ConnectionPool>& conn = connectionPools_[client_key];
   if (conn == nullptr) {
