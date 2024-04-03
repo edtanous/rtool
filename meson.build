@@ -1,15 +1,14 @@
 project('rtool', 'cpp',
         version : '1.0',
-        meson_version: '>=0.57.0',
+        meson_version: '>=1.2.0',
         default_options: [
             'b_lto_mode=default',
             'b_lto_threads=0',
             'b_lto=true',
-            'b_ndebug=if-release',
             'cpp_rtti=false',
             'cpp_std=c++20',
             'warning_level=3',
-            'werror=true',
+            'werror=false',
            ])
 
 # Project related links
@@ -28,12 +27,16 @@ if get_option('cpp_std') != 'c++20'
 endif
 
 cxx = meson.get_compiler('cpp')
-add_project_arguments(
-  cxx.get_supported_arguments([
-    '-Wno-non-virtual-dtor'
-  ]),
-  language: 'cpp'
-)
+
+if cxx.get_id() == 'msvc'
+	add_global_arguments('/wd4133', language : ['c', 'cpp'])
+  add_global_arguments('/D_ITERATOR_DEBUG_LEVEL=0', language: ['c', 'cpp'])
+  # Windows 10
+  add_global_arguments('/D_WIN32_WINNT=0x0A00 ', language : ['c', 'cpp'])
+endif
+if cxx.get_id() == 'gnu'
+  add_project_arguments('-Wno-non-virtual-dtor', language: ['c', 'cpp'])
+endif
 
 rtool_dependencies = []
 
@@ -46,10 +49,6 @@ add_global_arguments(
   '-DBOOST_ASIO_NO_DEPRECATED',
   '-DBOOST_BEAST_NO_DEPRECATED',
 
-  # Separately compile asio elements to reduce intermediate compile times
-  '-DBOOST_ASIO_SEPARATE_COMPILATION',
-  '-DBOOST_BEAST_SEPARATE_COMPILATION',
-
   # Make the build reproducible by removing filename logging
   '-DBOOST_URL_NO_SOURCE_LOCATION',
   '-DOPENSSL_NO_FILENAMES',
@@ -61,41 +60,61 @@ add_global_arguments(
   language : 'cpp'
 )
 
-threads = dependency('threads')
-rtool_dependencies += threads
+rtool_dependencies += dependency('threads')
+rtool_dependencies += dependency('cli11', version: '>=2.2.0',  include_type: 'system', default_options:  ['default_library=static'])
 
-cli11 = dependency('cli11', version: '>=2.2.0', required : false, include_type: 'system')
-if not cli11.found()
-  cli11 = subproject('cli11', required: true).get_variable('CLI11_dep')
+rtool_dependencies += dependency('fmt', version: '>=9.0.0', include_type: 'system', default_options:  ['default_library=static'])
+
+rtool_dependencies += dependency('openssl', version: '>=3.0', include_type: 'system', default_options:  ['default_library=static'])
+
+rtool_dependencies += dependency('spdlog', include_type: 'system', default_options:  ['default_library=static'])
+
+
+boost = dependency(
+  'boost',
+  modules: [
+    'url',
+    'json',
+    ],
+  version : '>=1.84.0',
+  required : false,
+  include_type: 'system'
+)
+if boost.found()
+  rtool_dependencies += [boost]
+else
+  cmake = import('cmake')
+  opt = cmake.subproject_options()
+
+  opt.add_cmake_defines({
+    'BOOST_INCLUDE_LIBRARIES': 'asio;beast;fusion;json;headers;url;spirit',
+    'BOOST_EXCLUDE_LIBRARIES': 'context;coroutine',
+    'BUILD_SHARED_LIBS': 'OFF',
+    'CMAKE_BUILD_TYPE': get_option('debug') ? 'Debug' : 'Release',
+  })
+
+  boost = cmake.subproject('boost', required: true, options: opt)
+  boost_asio = boost.dependency('boost_asio').as_system()
+  boost_beast = boost.dependency('boost_beast').as_system()
+  boost_fusion = boost.dependency('boost_fusion').as_system()
+  boost_headers = boost.dependency('boost_headers').as_system()
+  boost_json = boost.dependency('boost_json').as_system()
+  boost_spirit = boost.dependency('boost_spirit').as_system()
+  boost_url = boost.dependency('boost_url').as_system()
+
+  rtool_dependencies += [
+    boost_asio,
+    boost_beast,
+    boost_fusion,
+    boost_headers,
+    boost_json,
+    boost_spirit,
+    boost_url,
+  ]
 endif
-rtool_dependencies += cli11.as_system()
-
-fmt = dependency('fmt', version: '>=9.0.0', required : false, include_type: 'system')
-if not fmt.found()
-  fmt = subproject('fmt', required: true).get_variable('fmt_dep')
-endif
-rtool_dependencies += fmt.as_system()
-
-openssl = dependency('openssl', version: '>=3.0', required : false, include_type: 'system')
-if not openssl.found()
-  openssl = subproject('openssl', required: true)
-endif
-rtool_dependencies += openssl.as_system()
-
-
-boost = dependency('boost', version : '>=1.81.0', required : false, include_type: 'system')
-if not boost.found()
-  boost = subproject('boost', required: true).get_variable('boost_dep')
-endif
-rtool_dependencies += boost.as_system()
-
 
 # Source files
 srcfiles_rtool= [
-  'src/boost_asio_ssl.cpp',
-  'src/boost_asio.cpp',
-  'src/boost_beast.cpp',
-  'src/boost_json.cpp',
   'src/http_client.cpp',
   'src/path_parser.cpp',
   'src/path_parser_ast.cpp',

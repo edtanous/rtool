@@ -1,10 +1,11 @@
 #include <CLI/CLI.hpp>
 #include <boost/asio/io_context.hpp>
-#include <boost/beast/core/detail/base64.hpp>
 #include <boost/json.hpp>
 #include <boost/json/basic_parser_impl.hpp>
 #include <limits>
 #include <optional>
+#include <spdlog/spdlog.h>
+
 
 #include "boost_formatter.hpp"
 #include "http_client.hpp"
@@ -200,11 +201,13 @@ static void GetRedpath(const std::string& base_uri, HostConnectData host,
   boost::beast::http::fields headers;
   std::string auth = host.username + ":" + host.password;
   std::string auth_out;
+  /*
   auth_out.resize(boost::beast::detail::base64::encoded_size(auth.size()));
   auth_out.resize(boost::beast::detail::base64::encode(
       auth_out.data(), auth.data(), auth.size()));
   //fmt::print("Got base64 {}\n", auth_out);
   headers.set(boost::beast::http::field::authorization, "Basic " + auth_out);
+  */
   client->SendData(
       std::string(), host.host, host.port, base_uri, headers,
       boost::beast::http::verb::get,
@@ -212,6 +215,11 @@ static void GetRedpath(const std::string& base_uri, HostConnectData host,
 }
 
 int main(int argc, char** argv) {
+  spdlog::info("Rtool started");
+
+  spdlog::info("Parsing CLI");
+  spdlog::enable_backtrace(32);
+
   CLI::App app{"Redfish access tool"};
 
   http::ConnectPolicy policy;
@@ -247,8 +255,12 @@ int main(int argc, char** argv) {
   raw->add_option("get", redpaths, "Gets a list of properties");
 
   CLI11_PARSE(app, argc, argv);
+  spdlog::info("CLI Parsed");
+
 
   if (*sensor_list_opt) {
+      spdlog::info("Failed CLI");
+
     return EXIT_SUCCESS;
   }
 
@@ -272,6 +284,7 @@ int main(int argc, char** argv) {
   }
   http.reset();
   ioc.run();
+  spdlog::dump_backtrace();
 
   return EXIT_SUCCESS;
 }
