@@ -11,6 +11,10 @@ namespace filter_ast {
 
 // Represents a string that matches an identifier
 struct key_name : std::string {
+  key_name() = default;
+
+  key_name(std::string_view key): std::string(key){}
+
   auto operator<=>(const key_name&) const = default;
 
   std::string& str() { return *this; }

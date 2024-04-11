@@ -15,7 +15,6 @@
 #include "path_parser.hpp"
 #include "path_parser_fmt_printers.hpp"
 
-// The null parser discards all the data
 class RedpathParser {
   // Handler methods don't follow the naming convention.
   // NOLINTBEGIN
@@ -25,8 +24,8 @@ class RedpathParser {
   };
   struct Handler {
     explicit Handler(std::vector<redfish::filter_ast::path>&& redpaths_in) {
-      for (const auto& redpath : redpaths_in) {
-        redpaths.emplace_back(std::move(redpath), "");
+      for (const redfish::filter_ast::path& redpath : redpaths_in) {
+        redpaths.emplace_back(MatchedProperty{std::move(redpath), ""});
       }
     }
     std::vector<MatchedProperty> release() { return std::move(redpaths); }
@@ -294,8 +293,7 @@ void my_signal_handler(int signum) {
 
 void my_terminate_handler() {
   try {
-    SPDLOG_CRITICAL(
-        "{}", boost::stacktrace::to_string(boost::stacktrace::stacktrace()));
+    SPDLOG_CRITICAL(boost::stacktrace::to_string(boost::stacktrace::stacktrace()));
   } catch (...) {
   }
   std::abort();

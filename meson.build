@@ -66,13 +66,10 @@ add_global_arguments(
   '-DSPDLOG_USE_STD_FORMAT',
 
   '-DBOOST_STACKTRACE_LINK',
-  #'-DBOOST_STACKTRACE_USE_ADDR2LINE',
-  '-DBOOST_STACKTRACE_USE_BACKTRACE',
+  '-DBOOST_STACKTRACE_USE_ADDR2LINE',
+  #'-DBOOST_STACKTRACE_USE_BACKTRACE',
   language : 'cpp'
 )
-
-add_global_arguments('-g', '-fno-inline', language: 'cpp')
-link_args = '-fno-pie'
 
 # Threads
 #rtool_dependencies += dependency('threads')
@@ -85,8 +82,8 @@ rtool_dependencies += dependency('openssl', version: '>=3.0', include_type: 'sys
 
 rtool_dependencies += dependency('spdlog', include_type: 'system', default_options:  ['default_library=static'])
 
-rtool_dependencies += dependency('backtrace', required: true)
-#rtool_dependencies += dependency('dl', required: true)
+#rtool_dependencies += dependency('backtrace', required: true)
+rtool_dependencies += dependency('dl', required: true)
 
 boost = dependency(
   'boost',
@@ -108,7 +105,6 @@ else
     'BOOST_INCLUDE_LIBRARIES': 'asio;beast;fusion;json;headers;url;stacktrace;spirit',
     'BOOST_EXCLUDE_LIBRARIES': 'context;coroutine',
     'BUILD_SHARED_LIBS': 'OFF',
-    'CMAKE_CXX_FLAGS': '-no-pie',
     'CMAKE_BUILD_TYPE': get_option('debug') ? 'Debug' : 'Release',
   })
 
@@ -119,7 +115,8 @@ else
   boost_beast = boost.dependency('boost_beast').as_system()
   boost_fusion = boost.dependency('boost_fusion').as_system()
   boost_headers = boost.dependency('boost_headers').as_system()
-  boost_stacktrace = boost.dependency('boost_stacktrace_backtrace').as_system()
+  #boost_stacktrace = boost.dependency('boost_stacktrace_backtrace').as_system()
+  boost_stacktrace = boost.dependency('boost_stacktrace_addr2line').as_system()
 
   boost_json = boost.dependency('boost_json').as_system()
   boost_spirit = boost.dependency('boost_spirit').as_system()
@@ -148,7 +145,6 @@ rtoollib = static_library(
   'rtoollib',
   srcfiles_rtool,
   dependencies: rtool_dependencies,
-  link_args: link_args,
 )
 
 # Generate the rtool executable
@@ -158,7 +154,6 @@ executable(
   link_with: rtoollib,
   dependencies: rtool_dependencies,
   install: true,
-  link_args: link_args,
 )
 
 if(get_option('tests').enabled())
@@ -180,7 +175,6 @@ if(get_option('tests').enabled())
       gtest,
       gmock,
     ],
-    link_args: link_args,
   )
   test('path_parser', test_bin)
 endif
