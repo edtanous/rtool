@@ -1,19 +1,17 @@
 #pragma once
 
-#include <fmt/core.h>
+#include <format>
 
 #include <boost/beast/core.hpp>
 #include <boost/system/error_code.hpp>
 
 template <>
-struct fmt::formatter<boost::system::error_code> {
-  template <typename ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
+struct std::formatter<boost::system::error_code> {
+  constexpr auto parse(auto& ctx) {
     return ctx.begin();
   }
-  template <typename FormatContext>
-  auto format(const boost::system::error_code& ec, FormatContext& ctx) {
-    return fmt::format_to(ctx.out(), "{}: {}", ec.category().name(),
+  auto format(const boost::system::error_code& ec, auto& ctx) const noexcept {
+    return std::format_to(ctx.out(), "{} {}: {}", ec.category().name(), ec.message(),
                           ec.value());
   }
 };

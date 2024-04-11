@@ -1,0 +1,8 @@
+[wrap-git]
+directory = backtrace
+url = git@github.com:ianlancetaylor/libbacktrace.git
+revision = head
+patch_directory = backtrace
+
+[provide]
+backtrace = backtrace_dep

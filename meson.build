@@ -4,7 +4,7 @@ project('rtool', 'cpp',
         default_options: [
             'b_lto_mode=default',
             'b_lto_threads=0',
-            'b_lto=true',
+            'b_pie=false',
             'cpp_rtti=false',
             'cpp_std=c++20',
             'warning_level=3',
@@ -34,7 +34,10 @@ if cxx.get_id() == 'msvc'
   # Windows 10
   add_global_arguments('/D_WIN32_WINNT=0x0A00 ', language : ['c', 'cpp'])
 endif
-if cxx.get_id() == 'gnu'
+if cxx.get_id() == 'gcc'
+  if (cxx.version().version_compare('<13.0'))
+    error('This project requires gcc-13 or higher')
+  endif
   add_project_arguments('-Wno-non-virtual-dtor', language: ['c', 'cpp'])
 endif
 
@@ -57,18 +60,33 @@ add_global_arguments(
   '-DBOOST_SPIRIT_X3_NO_RTTI',
   '-DBOOST_SPIRIT_DEBUG',
   '-DBOOST_SPIRIT_DEBUG_OUT',
+
+  # Spdlog
+  '-DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG',
+  '-DSPDLOG_USE_STD_FORMAT',
+
+  '-DBOOST_STACKTRACE_LINK',
+  #'-DBOOST_STACKTRACE_USE_ADDR2LINE',
+  '-DBOOST_STACKTRACE_USE_BACKTRACE',
   language : 'cpp'
 )
 
-rtool_dependencies += dependency('threads')
+add_global_arguments('-g', '-fno-inline', language: 'cpp')
+link_args = '-fno-pie'
+
+# Threads
+#rtool_dependencies += dependency('threads')
+
+# CLI11
 rtool_dependencies += dependency('cli11', version: '>=2.2.0',  include_type: 'system', default_options:  ['default_library=static'])
 
-rtool_dependencies += dependency('fmt', version: '>=9.0.0', include_type: 'system', default_options:  ['default_library=static'])
-
+# openssl
 rtool_dependencies += dependency('openssl', version: '>=3.0', include_type: 'system', default_options:  ['default_library=static'])
 
 rtool_dependencies += dependency('spdlog', include_type: 'system', default_options:  ['default_library=static'])
 
+rtool_dependencies += dependency('backtrace', required: true)
+#rtool_dependencies += dependency('dl', required: true)
 
 boost = dependency(
   'boost',
@@ -87,17 +105,22 @@ else
   opt = cmake.subproject_options()
 
   opt.add_cmake_defines({
-    'BOOST_INCLUDE_LIBRARIES': 'asio;beast;fusion;json;headers;url;spirit',
+    'BOOST_INCLUDE_LIBRARIES': 'asio;beast;fusion;json;headers;url;stacktrace;spirit',
     'BOOST_EXCLUDE_LIBRARIES': 'context;coroutine',
     'BUILD_SHARED_LIBS': 'OFF',
+    'CMAKE_CXX_FLAGS': '-no-pie',
     'CMAKE_BUILD_TYPE': get_option('debug') ? 'Debug' : 'Release',
   })
 
   boost = cmake.subproject('boost', required: true, options: opt)
+  message('Boost targets:\n - ' + '\n - '.join(boost.target_list()))
+
   boost_asio = boost.dependency('boost_asio').as_system()
   boost_beast = boost.dependency('boost_beast').as_system()
   boost_fusion = boost.dependency('boost_fusion').as_system()
   boost_headers = boost.dependency('boost_headers').as_system()
+  boost_stacktrace = boost.dependency('boost_stacktrace_backtrace').as_system()
+
   boost_json = boost.dependency('boost_json').as_system()
   boost_spirit = boost.dependency('boost_spirit').as_system()
   boost_url = boost.dependency('boost_url').as_system()
@@ -107,6 +130,7 @@ else
     boost_beast,
     boost_fusion,
     boost_headers,
+    boost_stacktrace,
     boost_json,
     boost_spirit,
     boost_url,
@@ -124,6 +148,7 @@ rtoollib = static_library(
   'rtoollib',
   srcfiles_rtool,
   dependencies: rtool_dependencies,
+  link_args: link_args,
 )
 
 # Generate the rtool executable
@@ -133,6 +158,7 @@ executable(
   link_with: rtoollib,
   dependencies: rtool_dependencies,
   install: true,
+  link_args: link_args,
 )
 
 if(get_option('tests').enabled())
@@ -150,9 +176,11 @@ if(get_option('tests').enabled())
     'src/path_parser_test.cpp',
     link_with: rtoollib,
     dependencies: [
+      rtool_dependencies,
       gtest,
       gmock,
-    ]
+    ],
+    link_args: link_args,
   )
   test('path_parser', test_bin)
 endif

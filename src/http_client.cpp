@@ -1,6 +1,6 @@
 #include "http_client.hpp"
 
-#include <fmt/core.h>
+#include <openssl/err.h>
 
 #include <boost/asio/connect.hpp>
 #include <boost/asio/experimental/channel.hpp>
@@ -28,13 +28,31 @@
 #include <memory>
 #include <queue>
 #include <string>
+#include <format>
 
 #include "boost_formatter.hpp"
 #include "http_response.hpp"
 
 namespace http {
+
+namespace {
+std::string printOsslError(const boost::system::error_code& ec) {
+  std::string err = ec.message();
+  if (ec.category() == boost::asio::error::get_ssl_category()) {
+    err +=
+        std::format(" ({},{}) ", ERR_GET_LIB(ec.value()),
+                     ERR_GET_REASON(ec.value()));
+    // ERR_PACK /* crypto/err/err.h */
+    std::array<char, 128> buf;
+    ::ERR_error_string_n(ec.value(), buf.data(), buf.size());
+    err += buf.data();
+  }
+  return err;
+}
+}  // namespace
+
 void ConnectionInfo::DoResolve() {
-  // fmt::print("starting resolve\n");
+  SPDLOG_DEBUG("starting resolve");
   resolver_.async_resolve(
       host_, std::to_string(port_),
       std::bind_front(&ConnectionInfo::AfterResolve, this, shared_from_this()));
@@ -51,7 +69,7 @@ void ConnectionInfo::AfterResolve(
   timer_.expires_after(std::chrono::seconds(30));
   timer_.async_wait(std::bind_front(OnTimeout, weak_from_this()));
 
-  // fmt::print("starting connect\n");
+  SPDLOG_DEBUG("starting connect");
   boost::asio::async_connect(
       conn_, endpoint_list,
       std::bind_front(&ConnectionInfo::AfterConnect, this, shared_from_this()));
@@ -63,10 +81,10 @@ void ConnectionInfo::AfterConnect(
     const boost::asio::ip::tcp::endpoint& /*endpoint*/) {
   timer_.cancel();
   if (ec) {
-    // fmt::print("Connect failed: {}\n", ec);
+    SPDLOG_DEBUG("Connect failed: {}", ec);
     return;
   }
-  // fmt::print("Connected\n");
+  SPDLOG_DEBUG("Connected");
   if (sslConn_) {
     DoSslHandshake();
     return;
@@ -81,7 +99,7 @@ void ConnectionInfo::DoSslHandshake() {
   timer_.expires_after(std::chrono::seconds(10));
   timer_.async_wait(std::bind_front(OnTimeout, weak_from_this()));
 
-  // fmt::print("starting handshake\n");
+  SPDLOG_DEBUG("starting handshake");
   sslConn_->async_handshake(boost::asio::ssl::stream_base::client,
                             std::bind_front(&ConnectionInfo::AfterSslHandshake,
                                             this, shared_from_this()));
@@ -92,15 +110,15 @@ void ConnectionInfo::AfterSslHandshake(
     boost::beast::error_code ec) {
   timer_.cancel();
   if (ec) {
-    // fmt::print("handshake failed {}\n", ec);
+    SPDLOG_DEBUG("handshake failed {}", printOsslError(ec));
     return;
   }
-  // fmt::print("handshake succeeded {}\n", ec);
+  SPDLOG_DEBUG("handshake succeeded {}", ec);
   SendMessage();
 }
 
 void ConnectionInfo::SendMessage() {
-  // fmt::print("getting message\n");
+  SPDLOG_DEBUG("getting message");
   channel_->async_receive(std::bind_front(&ConnectionInfo::OnMessageReadyToSend,
                                           this, shared_from_this()));
 
@@ -112,10 +130,16 @@ void ConnectionInfo::SendMessage() {
 void ConnectionInfo::OnMessageReadyToSend(
     const std::shared_ptr<ConnectionInfo>& /*self*/,
     boost::system::error_code ec, PendingRequest pending) {
-  // fmt::print("Got Message\n");
   if (ec) {
+    if (ec == boost::asio::experimental::error::channel_cancelled){
+      SPDLOG_DEBUG("Channel destroyed, closing connection {}", ec);
+      return;
+    }
+    SPDLOG_ERROR("Failed to get message {}", ec);
     return;
   }
+  SPDLOG_DEBUG("Got Message");
+
   // Cancel our idle waiting event
   conn_.cancel(ec);
   // intentionally ignore errors here.  It's possible there was
@@ -180,7 +204,8 @@ void ConnectionInfo::RecvMessage() {
 
 void ConnectionInfo::AfterRead(const std::shared_ptr<ConnectionInfo>& /*self*/,
                                const boost::beast::error_code& ec,
-                               const std::size_t /*bytesTransferred*/) {
+                               const std::size_t bytesTransferred) {
+  SPDLOG_DEBUG("Read {} from server ec={}", bytesTransferred, ec);
   timer_.cancel();
   if (ec && ec != boost::asio::ssl::error::stream_truncated) {
     callback_(Response(parser_->release()));
@@ -295,7 +320,7 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& ioc_in,
       policy_(policy_in),
       timer_(ioc_in),
       channel_(channel_in) {
-  // fmt::print("Constructing ConnectionInfo\n");
+  SPDLOG_DEBUG("Constructing ConnectionInfo");
   if (policy_->use_tls) {
     boost::asio::ssl::context ssl_ctx(boost::asio::ssl::context::tls_client);
 
@@ -310,7 +335,7 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& ioc_in,
                             boost::asio::ssl::context::no_tlsv1_1,
                         ec);
     if (ec) {
-      std::cout << "Error\n";
+      std::cout << "Error";
       return;
     }
 
@@ -319,20 +344,20 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& ioc_in,
       // used for performing verification.
       ssl_ctx.set_default_verify_paths(ec);
       if (ec) {
-        std::cout << "Error\n";
+        std::cout << "Error";
         return;
       }
 
       // Verify the remote server's certificate
       ssl_ctx.set_verify_mode(boost::asio::ssl::verify_peer, ec);
       if (ec) {
-        std::cout << "Error\n";
+        std::cout << "Error";
         return;
       }
     } else {
       ssl_ctx.set_verify_mode(boost::asio::ssl::verify_none, ec);
       if (ec) {
-        std::cout << "Error\n";
+        std::cout << "Error";
         return;
       }
     }
@@ -353,7 +378,7 @@ ConnectionInfo::ConnectionInfo(boost::asio::io_context& ioc_in,
         "TLS_CHACHA20_POLY1305_SHA256";
 
     if (SSL_CTX_set_cipher_list(ssl_ctx.native_handle(), kSslCiphers) != 1) {
-      std::cout << "Error\n";
+      std::cout << "Error";
       return;
     }
 
@@ -392,7 +417,7 @@ void ConnectionPool::QueuePending(PendingRequest&& pending) {
   }
   pushInProgress_ = true;
 
-  // fmt::print("sending\n");
+  SPDLOG_DEBUG("sending");
 
   channel_->async_send(
       boost::system::error_code(), std::move(pending),
@@ -402,6 +427,7 @@ void ConnectionPool::QueuePending(PendingRequest&& pending) {
 void ConnectionPool::ChannelPushComplete(
     const std::weak_ptr<ConnectionPool>& weak_self,
     boost::system::error_code ec) {
+  SPDLOG_DEBUG("Channel Push complete");
   std::shared_ptr<ConnectionPool> self = weak_self.lock();
   if (self == nullptr) {
     return;
@@ -409,13 +435,14 @@ void ConnectionPool::ChannelPushComplete(
 
   self->pushInProgress_ = false;
   if (ec) {
+    SPDLOG_ERROR("Channel Push failed: {}", ec);
     return;
   }
 
   if (!self->requestQueue_.empty()) {
     self->pushInProgress_ = true;
 
-    // fmt::print("sending\n");
+    SPDLOG_DEBUG("sending");
 
     self->channel_->async_send(
         boost::system::error_code(), std::move(self->requestQueue_.front()),
@@ -433,7 +460,7 @@ ConnectionPool::ConnectionPool(boost::asio::io_context& ioc_in,
       destIP_(dest_ip_in),
       destPort_(dest_port_in),
       policy_(policy_in),
-      channel_(std::make_shared<Channel>(ioc_, 0)) {}
+      channel_(std::make_shared<Channel>(ioc_, 128)) {}
 
 Client::Client(boost::asio::io_context& ioc_in, ConnectPolicy policy_in)
     : policy_(std::make_shared<ConnectPolicy>(policy_in)), ioc_(ioc_in) {}
@@ -449,7 +476,7 @@ void Client::SendData(std::string&& data, std::string_view dest_ip,
   client_key += dest_ip;
   client_key += ":";
   client_key += std::to_string(dest_port);
-  //fmt::print("Requesting {}{}\n", client_key, dest_uri);
+  SPDLOG_DEBUG("Requesting {}{}", client_key, dest_uri);
   // Use nullptr to avoid creating a ConnectionPool each time
   std::shared_ptr<ConnectionPool>& conn = connectionPools_[client_key];
   if (conn == nullptr) {

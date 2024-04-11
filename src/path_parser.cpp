@@ -8,6 +8,8 @@
 #include "path_parser_ast.hpp"
 #include "path_parser_internal.hpp"
 
+#include <spdlog/spdlog.h>
+
 namespace redfish {
 namespace ast {
 ///////////////////////////////////////////////////////////////////////////
@@ -43,9 +45,9 @@ std::optional<redfish::filter_ast::path> parseRedfishPath(
   bool r = boost::spirit::x3::parse(iter, expr.end(), calc, program);
 
   if (!r || iter != expr.end()) {
-    std::cout << "Parsing failed\n";
+    SPDLOG_ERROR("Parsing failed");
     std::string rest(iter, expr.end());
-    std::cout << "stopped at: \"" << rest << "\"\n";
+    SPDLOG_ERROR("stopped at: \"{}\"", rest);
     return std::nullopt;
   }
   return program;

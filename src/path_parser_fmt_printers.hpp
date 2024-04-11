@@ -1,5 +1,5 @@
 #pragma once
-#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/fusion/include/at_c.hpp>
@@ -26,7 +26,7 @@ struct Struct_member_printer {
     std::string member_name =
         boost::fusion::extension::struct_member_name<Sequence,
                                                      Index::value>::call();
-    fmt::format_to(ctx_.out(), "{} {}", member_type, member_name);
+    std::format_to(ctx_.out(), "    {} {}\n", member_type, member_name);
   }
 };
 template <typename FormatContext, typename Sequence>
@@ -34,21 +34,20 @@ auto print_struct(FormatContext& ctx, Sequence const& v) {
   typedef boost::mpl::range_c<unsigned, 0,
                               boost::fusion::result_of::size<Sequence>::value>
       Indices;
-  fmt::format_to(ctx.out(), "{{");
+  std::format_to(ctx.out(), "\n{{\n");
   boost::fusion::for_each(
       Indices(), Struct_member_printer<FormatContext, Sequence>(v, ctx));
-  return fmt::format_to(ctx.out(), "}}");
+  return std::format_to(ctx.out(), "}}");
 }
 
 template <>
-struct fmt::formatter<redfish::filter_ast::path> {
+struct std::formatter<redfish::filter_ast::path> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
-  template <typename FormatContext>
-  auto format(redfish::filter_ast::path& p, FormatContext& ctx) {
+  auto format(const redfish::filter_ast::path& p, auto& ctx) const noexcept{
     return print_struct(ctx, p);
   }
 };

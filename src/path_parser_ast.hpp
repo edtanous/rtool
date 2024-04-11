@@ -1,5 +1,5 @@
 #pragma once
-#include <boost/fusion/include/adapt_struct.hpp>
+#include <boost/fusion/adapted/struct/adapt_struct.hpp>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -12,6 +12,10 @@ namespace filter_ast {
 // Represents a string that matches an identifier
 struct key_name : std::string {
   auto operator<=>(const key_name&) const = default;
+
+  std::string& str() { return *this; }
+
+  const std::string& str() const { return *this; }
 };
 
 struct key_filter {

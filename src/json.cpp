@@ -8,7 +8,7 @@ void PrettyPrint(std::ostream& os, boost::json::value const& jv,
   }
   switch (jv.kind()) {
     case boost::json::kind::object: {
-      os << "{\n";
+      os << "{";
       indent->append(4, ' ');
       auto const& obj = jv.get_object();
       if (!obj.empty()) {
@@ -19,17 +19,17 @@ void PrettyPrint(std::ostream& os, boost::json::value const& jv,
           if (++it == obj.end()) {
             break;
           }
-          os << ",\n";
+          os << ",";
         }
       }
-      os << "\n";
+      os << "";
       indent->resize(indent->size() - 4);
       os << *indent << "}";
       break;
     }
 
     case boost::json::kind::array: {
-      os << "[\n";
+      os << "[";
       indent->append(4, ' ');
       auto const& arr = jv.get_array();
       if (!arr.empty()) {
@@ -40,10 +40,10 @@ void PrettyPrint(std::ostream& os, boost::json::value const& jv,
           if (++it == arr.end()) {
             break;
           }
-          os << ",\n";
+          os << ",";
         }
       }
-      os << "\n";
+      os << "";
       indent->resize(indent->size() - 4);
       os << *indent << "]";
       break;
@@ -80,6 +80,6 @@ void PrettyPrint(std::ostream& os, boost::json::value const& jv,
   }
 
   if (indent->empty()) {
-    os << "\n";
+    os << "";
   }
 }
