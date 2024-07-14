@@ -16,6 +16,7 @@ project_pretty_name = 'rtool'
 project_url = 'https://github.com/edtanous/rtool'
 project_issues_url = project_url + '/issues/new'
 
+
 summary('Issues',
   project_issues_url,
   section: 'Report Issues'
@@ -65,9 +66,10 @@ add_global_arguments(
   '-DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG',
   '-DSPDLOG_USE_STD_FORMAT',
 
-  '-DBOOST_STACKTRACE_LINK',
-  '-DBOOST_STACKTRACE_USE_ADDR2LINE',
+  #'-DBOOST_STACKTRACE_LINK',
+  #'-DBOOST_STACKTRACE_USE_ADDR2LINE',
   #'-DBOOST_STACKTRACE_USE_BACKTRACE',
+  '-DBOOST_STACKTRACE_BACKTRACE_FORCE_STATIC',
   language : 'cpp'
 )
 
@@ -83,7 +85,9 @@ rtool_dependencies += dependency('openssl', version: '>=3.0', include_type: 'sys
 rtool_dependencies += dependency('spdlog', include_type: 'system', default_options:  ['default_library=static'])
 
 #rtool_dependencies += dependency('backtrace', required: true)
-rtool_dependencies += dependency('dl', required: true)
+if target_machine.system() == 'linux'
+  rtool_dependencies += dependency('dl')
+endif
 
 boost = dependency(
   'boost',
@@ -110,13 +114,17 @@ else
 
   boost = cmake.subproject('boost', required: true, options: opt)
   message('Boost targets:\n - ' + '\n - '.join(boost.target_list()))
-
   boost_asio = boost.dependency('boost_asio').as_system()
   boost_beast = boost.dependency('boost_beast').as_system()
   boost_fusion = boost.dependency('boost_fusion').as_system()
   boost_headers = boost.dependency('boost_headers').as_system()
-  #boost_stacktrace = boost.dependency('boost_stacktrace_backtrace').as_system()
-  boost_stacktrace = boost.dependency('boost_stacktrace_addr2line').as_system()
+  if target_machine.system() == 'linux'
+    #boost_stacktrace = boost.dependency('boost_stacktrace_backtrace').as_system()
+  endif
+  if target_machine.system() == 'windows'
+    boost_stacktrace = boost.dependency('boost_stacktrace_windbg').as_system()
+  endif
+  rtool_dependencies += [boost_stacktrace]
 
   boost_json = boost.dependency('boost_json').as_system()
   boost_spirit = boost.dependency('boost_spirit').as_system()
@@ -127,7 +135,6 @@ else
     boost_beast,
     boost_fusion,
     boost_headers,
-    boost_stacktrace,
     boost_json,
     boost_spirit,
     boost_url,

@@ -151,7 +151,7 @@ class RedpathParser {
       return true;
     }
     bool on_null(std::error_code& /*unused*/) {
-      SPDLOG_DEBUG("Value of {} was {} null",
+      SPDLOG_DEBUG("Value of {} was null",
                    current_key.substr(0, current_key.size() - 1));
       pop_value();
 
@@ -341,7 +341,7 @@ int main(int argc, char** argv) {
   std::optional<uint16_t> port;
   app.add_option("--port", port, "Port to connect to");
 
-  app.add_flag("--tls", policy->use_tls, "Use TLS+HTTP");
+  app.add_flag("--tls,!--no-tls", policy->use_tls, "Use TLS+HTTP");
 
   app.add_flag("--verify_server,!--no-verify-server",
                policy->verify_server_certificate,
